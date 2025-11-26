@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <h2>Settings</h2>
+        <p class="text-muted">Configure bot and system settings</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5>Bot Configuration</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_bot_settings') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Welcome Message</label>
+                        <textarea name="welcome_message" class="form-control" rows="3">{{ welcome_message }}</textarea>
+                        <div class="form-text">Message sent to new users</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Send Delay (seconds)</label>
+                        <input type="number" name="send_delay" class="form-control" step="0.1" value="{{ send_delay }}">
+                        <div class="form-text">Delay between bulk message sends</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Log Level</label>
+                        <select name="log_level" class="form-select">
+                            <option value="DEBUG" {% if log_level == 'DEBUG' %}selected{% endif %}>DEBUG</option>
+                            <option value="INFO" {% if log_level == 'INFO' %}selected{% endif %}>INFO</option>
+                            <option value="WARNING" {% if log_level == 'WARNING' %}selected{% endif %}>WARNING</option>
+                            <option value="ERROR" {% if log_level == 'ERROR' %}selected{% endif %}>ERROR</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Update Bot Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5>Admin Settings</h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('update_admin_settings') }}">
+                    <div class="mb-3">
+                        <label class="form-label">Admin Password</label>
+                        <input type="password" name="admin_password" class="form-control" placeholder="Leave empty to keep current">
+                        <div class="form-text">Change the admin login password</div>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Session Timeout (minutes)</label>
+                        <input type="number" name="session_timeout" class="form-control" value="60">
+                        <div class="form-text">Auto-logout after inactivity</div>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">Update Admin Settings</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row mt-4">
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5>System Information</h5>
+            </div>
+            <div class="card-body">
+                <p><strong>Python Version:</strong> {{ python_version }}</p>
+                <p><strong>Flask Version:</strong> {{ flask_version }}</p>
+                <p><strong>Database:</strong> MongoDB</p>
+                <p><strong>Log File:</strong> {{ log_file }}</p>
+                <p><strong>Uptime:</strong> <span id="uptime">Loading...</span></p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5>Maintenance</h5>
+            </div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <button class="btn btn-warning" onclick="clearOldLogs()">
+                        <i class="fas fa-broom"></i> Clear Old Logs
+                    </button>
+                    <button class="btn btn-danger" onclick="resetDatabase()" disabled>
+                        <i class="fas fa-exclamation-triangle"></i> Reset Database (Disabled)
+                    </button>
+                    <button class="btn btn-info" onclick="exportSettings()">
+                        <i class="fas fa-download"></i> Export Settings
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function clearOldLogs() {
+    if (confirm('Clear logs older than 30 days?')) {
+        fetch('/api/maintenance/clear_logs', { method: 'POST' })
+            .then(response => response.json())
+            .then(data => alert(data.message));
+    }
+}
+
+function exportSettings() {
+    fetch('/api/settings/export')
+        .then(response => response.blob())
+        .then(blob => {
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'bot_settings_' + new Date().toISOString().split('T')[0] + '.json';
+            a.click();
+        });
+}
+
+// Update uptime
+setInterval(() => {
+    const startTime = new Date('{{ start_time }}');
+    const now = new Date();
+    const diff = Math.floor((now - startTime) / 1000);
+    const hours = Math.floor(diff / 3600);
+    const minutes = Math.floor((diff % 3600) / 60);
+    document.getElementById('uptime').textContent = `${hours}h ${minutes}m`;
+}, 60000);
+</script>
+{% endblock %}

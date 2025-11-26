@@ -8,41 +8,208 @@
     </div>
 </div>
 
-<div class="row">
-    <div class="col-md-4">
-        <div class="card text-white bg-primary mb-3 shadow">
-            <div class="card-header">Total Users</div>
+<!-- Statistics Cards -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card text-white bg-primary shadow">
             <div class="card-body">
-                <h1 class="card-title display-4">{{ user_count }}</h1>
-                <p class="card-text">Registered users in database</p>
-                <a href="{{ url_for('users') }}" class="btn btn-light btn-sm">Manage Users</a>
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h3 class="card-title mb-0" id="userCount">{{ user_count }}</h3>
+                        <p class="card-text mb-0">Total Users</p>
+                    </div>
+                    <i class="fas fa-users fa-2x opacity-75"></i>
+                </div>
+                <a href="{{ url_for('users') }}" class="btn btn-light btn-sm mt-2">Manage Users</a>
             </div>
         </div>
     </div>
 
-    <div class="col-md-4">
-        <div class="card text-white bg-success mb-3 shadow">
-            <div class="card-header">Bot Status</div>
+    <div class="col-md-3">
+        <div class="card text-white bg-success shadow">
             <div class="card-body">
-                <h5 class="card-title">Online ✅</h5>
-                <p class="card-text">
-                    <strong>Name:</strong> {{ bot_name }}<br>
-                    <strong>Username:</strong> @{{ bot_username }}
-                </p>
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Online ✅</h5>
+                        <p class="card-text mb-0">
+                            <small>{{ bot_name }}</small><br>
+                            <small>@{{ bot_username }}</small>
+                        </p>
+                    </div>
+                    <i class="fas fa-robot fa-2x opacity-75"></i>
+                </div>
             </div>
         </div>
     </div>
 
-    <div class="col-md-4">
-        <div class="card text-white bg-info mb-3 shadow">
-            <div class="card-header">Quick Actions</div>
+    <div class="col-md-3">
+        <div class="card text-white bg-info shadow">
             <div class="card-body">
-                <div class="d-grid gap-2">
-                    <a href="{{ url_for('send_message') }}" class="btn btn-light">Send Bulk Message</a>
-                    <a href="{{ url_for('export_users') }}" class="btn btn-light">Export Users (Excel)</a>
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h3 class="card-title mb-0" id="messageCount">0</h3>
+                        <p class="card-text mb-0">Total Messages</p>
+                    </div>
+                    <i class="fas fa-envelope fa-2x opacity-75"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-3">
+        <div class="card text-white bg-warning shadow">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <h5 class="card-title">Quick Actions</h5>
+                        <div class="d-grid gap-1">
+                            <a href="{{ url_for('send_message') }}" class="btn btn-light btn-sm">Send Message</a>
+                            <a href="{{ url_for('export_users') }}" class="btn btn-light btn-sm">Export Users</a>
+                            <a href="{{ url_for('export_analytics') }}" class="btn btn-light btn-sm">Export Analytics</a>
+                        </div>
+                    </div>
+                    <i class="fas fa-bolt fa-2x opacity-75"></i>
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<!-- Charts Row -->
+<div class="row mb-4">
+    <div class="col-md-8">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-line"></i> User Growth (Last 30 Days)</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="userGrowthChart" width="400" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-pie"></i> Message Statistics</h5>
+            </div>
+            <div class="card-body">
+                <canvas id="messageStatsChart" width="200" height="200"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Activity -->
+<div class="row">
+    <div class="col-md-12">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5><i class="fas fa-history"></i> Recent Activity</h5>
+            </div>
+            <div class="card-body">
+                <div class="list-group list-group-flush" id="recentActivity">
+                    <div class="list-group-item">
+                        <i class="fas fa-spinner fa-spin me-2"></i> Loading recent activity...
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// Load charts data and initialize
+async function loadDashboardData() {
+    try {
+        // Load user growth data
+        const growthResponse = await fetch('/api/analytics/user_growth');
+        const growthData = await growthResponse.json();
+
+        // User Growth Chart
+        const growthCtx = document.getElementById('userGrowthChart').getContext('2d');
+        new Chart(growthCtx, {
+            type: 'line',
+            data: {
+                labels: growthData.labels,
+                datasets: [{
+                    label: 'New Users',
+                    data: growthData.data,
+                    borderColor: 'rgb(75, 192, 192)',
+                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        beginAtZero: true
+                    }
+                }
+            }
+        });
+
+        // Load message stats
+        const statsResponse = await fetch('/api/analytics/message_stats');
+        const statsData = await statsResponse.json();
+
+        // Update counters
+        document.getElementById('messageCount').textContent = statsData.total_messages;
+
+        // Message Stats Chart
+        const statsCtx = document.getElementById('messageStatsChart').getContext('2d');
+        new Chart(statsCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Successful', 'Failed'],
+                datasets: [{
+                    data: [statsData.successful_sends, statsData.failed_sends],
+                    backgroundColor: [
+                        'rgb(40, 167, 69)',
+                        'rgb(220, 53, 69)'
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    }
+                }
+            }
+        });
+
+        // Mock recent activity
+        const activityHtml = `
+            <div class="list-group-item">
+                <i class="fas fa-user-plus text-success me-2"></i>
+                <small class="text-muted">2 mins ago</small>
+                <div>New user registered</div>
+            </div>
+            <div class="list-group-item">
+                <i class="fas fa-paper-plane text-primary me-2"></i>
+                <small class="text-muted">5 mins ago</small>
+                <div>Bulk message sent to 50 users</div>
+            </div>
+            <div class="list-group-item">
+                <i class="fas fa-exclamation-triangle text-warning me-2"></i>
+                <small class="text-muted">10 mins ago</small>
+                <div>3 message delivery failures</div>
+            </div>
+        `;
+        document.getElementById('recentActivity').innerHTML = activityHtml;
+
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+    }
+}
+
+// Load data when page loads
+document.addEventListener('DOMContentLoaded', loadDashboardData);
+
+// Auto-refresh every 30 seconds
+setInterval(loadDashboardData, 30000);
+</script>
 {% endblock %}

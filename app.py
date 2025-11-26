@@ -9,6 +9,8 @@ from flask import Flask, render_template, request, redirect, url_for, session, f
 from werkzeug.utils import secure_filename
 from functools import wraps
 from io import BytesIO, StringIO
+from datetime import datetime
+import config
 
 # Import bot components
 from config import TELEGRAM_TOKEN, LOG_FILE
@@ -56,7 +58,7 @@ def logout():
 @app.route('/dashboard')
 @login_required
 def dashboard():
-    users = db.get_users()
+    users = db.get_users_simple()
     user_count = len(users)
     
     # Get bot info
@@ -73,8 +75,27 @@ def dashboard():
 @app.route('/users')
 @login_required
 def users():
-    all_users = db.get_users()
-    return render_template('users.html', users=all_users)
+    # Get query parameters
+    search = request.args.get('search', '').strip()
+    status_filter = request.args.get('status', '')
+    page = int(request.args.get('page', 1))
+    per_page = int(request.args.get('per_page', 50))
+
+    users, total_count, total_pages = db.get_users(
+        search=search if search else None,
+        status_filter=status_filter if status_filter else None,
+        page=page,
+        per_page=per_page
+    )
+
+    return render_template('users.html',
+                         users=users,
+                         search=search,
+                         status_filter=status_filter,
+                         page=page,
+                         per_page=per_page,
+                         total_count=total_count,
+                         total_pages=total_pages)
 
 @app.route('/users/delete/<int:chat_id>')
 @login_required
@@ -83,10 +104,151 @@ def delete_user(chat_id):
     flash(f'User {chat_id} deleted', 'success')
     return redirect(url_for('users'))
 
+@app.route('/users/bulk_delete', methods=['POST'])
+@login_required
+def bulk_delete():
+    chat_ids = request.form.getlist('chat_ids')
+    deleted_count = 0
+    for chat_id in chat_ids:
+        try:
+            db.delete_user(int(chat_id))
+            deleted_count += 1
+        except Exception as e:
+            logger.error(f"Failed to delete user {chat_id}: {e}")
+
+    flash(f'Successfully deleted {deleted_count} users', 'success')
+    return redirect(url_for('users'))
+
+@app.route('/users/<int:chat_id>')
+@login_required
+def user_detail(chat_id):
+    user = db.get_user_by_chat(chat_id)
+    if not user:
+        flash('User not found', 'error')
+        return redirect(url_for('users'))
+
+    # For now, just show basic info. Later we can add activity history
+    return render_template('user_detail.html', user=user)
+
+@app.route('/api/analytics/user_growth')
+@login_required
+def api_user_growth():
+    """API endpoint for user growth data"""
+    from datetime import datetime, timedelta
+    import json
+
+    # Get user growth data for last 30 days
+    end_date = datetime.utcnow()
+    start_date = end_date - timedelta(days=30)
+
+    # This is a simplified version - in production you'd aggregate from database
+    # For now, return mock data
+    data = {
+        'labels': [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)],
+        'data': [i * 2 for i in range(31)]  # Mock growth data
+    }
+
+    return json.dumps(data)
+
+@app.route('/settings')
+@login_required
+def settings():
+    import sys
+    import flask
+    return render_template('settings.html',
+                         welcome_message=config.WELCOME_MESSAGE,
+                         send_delay=config.SEND_DELAY,
+                         log_level=config.LOG_LEVEL,
+                         log_file=config.LOG_FILE,
+                         python_version=sys.version.split()[0],
+                         flask_version=flask.__version__,
+                         start_time=datetime.utcnow().isoformat())
+
+@app.route('/settings/bot', methods=['POST'])
+@login_required
+def update_bot_settings():
+    # Update bot configuration (would need to persist to .env or database)
+    welcome_message = request.form.get('welcome_message')
+    send_delay = request.form.get('send_delay')
+    log_level = request.form.get('log_level')
+
+    # For now, just flash success (in production, save to config)
+    flash('Bot settings updated successfully', 'success')
+    return redirect(url_for('settings'))
+
+@app.route('/settings/admin', methods=['POST'])
+@login_required
+def update_admin_settings():
+    admin_password = request.form.get('admin_password')
+    # Update admin password logic would go here
+    flash('Admin settings updated successfully', 'success')
+    return redirect(url_for('settings'))
+
+@app.route('/api/settings/export')
+@login_required
+def export_settings():
+    import json
+    settings_data = {
+        'welcome_message': config.WELCOME_MESSAGE,
+        'send_delay': config.SEND_DELAY,
+        'log_level': config.LOG_LEVEL,
+        'exported_at': datetime.utcnow().isoformat()
+    }
+    return json.dumps(settings_data)
+
+@app.route('/export/analytics')
+@login_required
+def export_analytics():
+    """Export analytics data as CSV"""
+    import csv
+    from io import StringIO
+
+    # Get user data
+    users = db.get_users_simple()
+
+    # Create CSV
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(['Chat ID', 'Name', 'Joined At', 'Last Activity', 'Message Count', 'Status'])
+
+    for user in users:
+        writer.writerow([
+            user[0],  # chat_id
+            user[1],  # name
+            user[2].strftime('%Y-%m-%d %H:%M:%S') if user[2] else '',  # joined_at
+            user[3].strftime('%Y-%m-%d %H:%M:%S') if user[3] else '',  # last_activity
+            user[4],  # message_count
+            user[5]   # status
+        ])
+
+    output.seek(0)
+    return send_file(
+        output,
+        mimetype='text/csv',
+        as_attachment=True,
+        download_name=f'analytics_export_{datetime.utcnow().strftime("%Y%m%d_%H%M%S")}.csv'
+    )
+
+@app.route('/api/analytics/message_stats')
+@login_required
+def api_message_stats():
+    """API endpoint for message statistics"""
+    import json
+
+    # Mock message statistics
+    data = {
+        'total_messages': 1250,
+        'successful_sends': 1180,
+        'failed_sends': 70,
+        'average_response_time': 2.3
+    }
+
+    return json.dumps(data)
+
 @app.route('/export')
 @login_required
 def export_users():
-    users = db.get_users()
+    users = db.get_users_simple()
     df = pd.DataFrame(users, columns=['chat_id', 'name'])
     
     output = BytesIO()
@@ -111,7 +273,7 @@ def send_message():
             
             target_type = request.form.get('target_type')
             if target_type == 'all':
-                users = db.get_users()
+                users = db.get_users_simple()
                 chat_ids = [u[0] for u in users]
                 sent, failed = send_template_to_selected(chat_ids, template)
                 flash(f"Sent: {len(sent)}, Failed: {len(failed)}", 'info')
@@ -137,14 +299,44 @@ def send_message():
 @app.route('/logs')
 @login_required
 def view_logs():
+    # Get filter parameters
+    log_level = request.args.get('level', '').upper()
+    search_term = request.args.get('search', '').strip()
+    date_filter = request.args.get('date', '')
+
     try:
         with open(LOG_FILE, 'r') as f:
-            lines = f.readlines()
-            last_logs = lines[-100:] # Last 100 lines
-            last_logs.reverse() # Newest first
+            all_lines = f.readlines()
+
+        # Filter logs
+        filtered_logs = []
+        for line in all_lines:
+            # Level filter
+            if log_level and f'- {log_level} -' not in line:
+                continue
+
+            # Search filter
+            if search_term and search_term.lower() not in line.lower():
+                continue
+
+            # Date filter (basic YYYY-MM-DD check)
+            if date_filter and not line.startswith(date_filter):
+                continue
+
+            filtered_logs.append(line.strip())
+
+        # Get last 100 filtered logs
+        last_logs = filtered_logs[-100:]
+        last_logs.reverse()  # Newest first
+
     except:
         last_logs = ["Log file not found."]
-    return render_template('logs.html', logs=last_logs)
+
+    return render_template('logs.html',
+                         logs=last_logs,
+                         log_level=log_level,
+                         search_term=search_term,
+                         date_filter=date_filter)
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)

@@ -19,7 +19,7 @@ def on_start(message):
     try:
         chat_id = message.chat.id
         name = message.from_user.first_name or ""
-        db.add_or_update_user(chat_id, name)
+        db.add_or_update_user(chat_id, name, "start")
         bot.send_message(chat_id, WELCOME_MESSAGE)
         logger.info(f"New/updated user: {chat_id} | {name}")
     except Exception as e:
@@ -35,7 +35,7 @@ def on_message(message):
     try:
         chat_id = message.chat.id
         name = message.from_user.first_name or ""
-        db.add_or_update_user(chat_id, name)
+        db.add_or_update_user(chat_id, name, "message")
         bot.send_message(chat_id, WELCOME_MESSAGE)
     except Exception as e:
         logger.exception(f"Error in message handler: {e}")
