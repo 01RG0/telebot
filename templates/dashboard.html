@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-12 mb-4">
+        <h2>Dashboard</h2>
+        <p class="text-muted">Welcome to your bot control panel.</p>
+    </div>
+</div>
+
+<div class="row">
+    <div class="col-md-4">
+        <div class="card text-white bg-primary mb-3 shadow">
+            <div class="card-header">Total Users</div>
+            <div class="card-body">
+                <h1 class="card-title display-4">{{ user_count }}</h1>
+                <p class="card-text">Registered users in database</p>
+                <a href="{{ url_for('users') }}" class="btn btn-light btn-sm">Manage Users</a>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card text-white bg-success mb-3 shadow">
+            <div class="card-header">Bot Status</div>
+            <div class="card-body">
+                <h5 class="card-title">Online ✅</h5>
+                <p class="card-text">
+                    <strong>Name:</strong> {{ bot_name }}<br>
+                    <strong>Username:</strong> @{{ bot_username }}
+                </p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-md-4">
+        <div class="card text-white bg-info mb-3 shadow">
+            <div class="card-header">Quick Actions</div>
+            <div class="card-body">
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('send_message') }}" class="btn btn-light">Send Bulk Message</a>
+                    <a href="{{ url_for('export_users') }}" class="btn btn-light">Export Users (Excel)</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

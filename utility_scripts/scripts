@@ -1,0 +1,195 @@
+"""
+Test Data Generator - Create fake users for testing bulk messaging
+This script adds test users to your MongoDB database
+"""
+from database import db
+import random
+import logging
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger("test_data_generator")
+
+# Sample Arabic and English names for variety
+ARABIC_NAMES = [
+    "محمد", "أحمد", "علي", "حسن", "حسين", "عمر", "خالد", "يوسف", "إبراهيم", "عبدالله",
+    "فاطمة", "عائشة", "خديجة", "مريم", "زينب", "سارة", "نور", "ليلى", "رنا", "دينا",
+    "كريم", "طارق", "سامي", "وليد", "ماجد", "فيصل", "سعيد", "منير", "رامي", "عادل",
+    "هدى", "سلمى", "ياسمين", "أمل", "رشا", "منى", "هالة", "نادية", "سميرة", "لبنى",
+    "عبدالرحمن", "عبدالعزيز", "محمود", "مصطفى", "جمال", "كمال", "نبيل", "صلاح", "رضا", "هاني"
+]
+
+ENGLISH_NAMES = [
+    "Ahmed", "Mohamed", "Ali", "Hassan", "Omar", "Khaled", "Youssef", "Ibrahim", "Abdullah", "Karim",
+    "Fatima", "Aisha", "Sarah", "Noor", "Layla", "Rana", "Dina", "Huda", "Salma", "Yasmin",
+    "Tarek", "Sami", "Walid", "Majed", "Faisal", "Saeed", "Rami", "Adel", "Nabil", "Hani",
+    "Mona", "Hala", "Nadia", "Samira", "Lobna", "Amal", "Rasha", "Mariam", "Zainab", "Khadija"
+]
+
+def generate_test_users(count=100):
+    """
+    Generate test users and add them to the database
+    
+    Args:
+        count: Number of test users to create (default: 100)
+    """
+    logger.info(f"Starting to generate {count} test users...")
+    
+    # Starting chat_id (using high numbers to avoid conflicts with real users)
+    base_chat_id = 9000000000
+    
+    added = 0
+    skipped = 0
+    
+    for i in range(count):
+        # Generate unique chat_id
+        chat_id = base_chat_id + i
+        
+        # Randomly choose Arabic or English name
+        if random.choice([True, False]):
+            name = random.choice(ARABIC_NAMES)
+        else:
+            name = random.choice(ENGLISH_NAMES)
+        
+        # Add some variation to names
+        if random.random() > 0.7:  # 30% chance to add number
+            name = f"{name} {random.randint(1, 99)}"
+        
+        try:
+            # Check if user already exists
+            existing = db.get_user_by_chat(chat_id)
+            if existing:
+                logger.warning(f"User {chat_id} already exists, skipping...")
+                skipped += 1
+                continue
+            
+            # Add user to database
+            db.add_or_update_user(chat_id, name)
+            added += 1
+            
+            if (i + 1) % 10 == 0:  # Progress update every 10 users
+                logger.info(f"Progress: {i + 1}/{count} users processed...")
+        
+        except Exception as e:
+            logger.error(f"Failed to add user {chat_id}: {e}")
+            skipped += 1
+    
+    logger.info("=" * 60)
+    logger.info("Test Data Generation Complete!")
+    logger.info(f"Total requested: {count}")
+    logger.info(f"Successfully added: {added}")
+    logger.info(f"Skipped (already exist): {skipped}")
+    logger.info("=" * 60)
+    
+    return added, skipped
+
+
+def clear_test_users():
+    """
+    Remove all test users (chat_id >= 9000000000)
+    WARNING: This will delete test users from the database!
+    """
+    logger.warning("=" * 60)
+    logger.warning("CLEARING TEST USERS")
+    logger.warning("=" * 60)
+    
+    # Get all users
+    all_users = db.get_users()
+    
+    deleted = 0
+    for chat_id, name in all_users:
+        if chat_id >= 9000000000:  # Test user range
+            try:
+                db.delete_user(chat_id)
+                deleted += 1
+                if deleted % 10 == 0:
+                    logger.info(f"Deleted {deleted} test users...")
+            except Exception as e:
+                logger.error(f"Failed to delete user {chat_id}: {e}")
+    
+    logger.info("=" * 60)
+    logger.info(f"Cleared {deleted} test users from database")
+    logger.info("=" * 60)
+    
+    return deleted
+
+
+def show_user_stats():
+    """Display statistics about users in the database"""
+    all_users = db.get_users()
+    
+    real_users = [u for u in all_users if u[0] < 9000000000]
+    test_users = [u for u in all_users if u[0] >= 9000000000]
+    
+    logger.info("=" * 60)
+    logger.info("DATABASE STATISTICS")
+    logger.info("=" * 60)
+    logger.info(f"Total users: {len(all_users)}")
+    logger.info(f"Real users (chat_id < 9000000000): {len(real_users)}")
+    logger.info(f"Test users (chat_id >= 9000000000): {len(test_users)}")
+    logger.info("=" * 60)
+    
+    if test_users:
+        logger.info("\nSample test users:")
+        for chat_id, name in test_users[:5]:
+            logger.info(f"  - {name} (ID: {chat_id})")
+        if len(test_users) > 5:
+            logger.info(f"  ... and {len(test_users) - 5} more")
+    
+    return len(all_users), len(real_users), len(test_users)
+
+
+if __name__ == "__main__":
+    print("\n" + "=" * 60)
+    print("TEST DATA GENERATOR FOR TELEGRAM BOT")
+    print("=" * 60)
+    print("\nThis script helps you test bulk messaging features")
+    print("by adding fake users to your database.")
+    print("\nOptions:")
+    print("  1. Add test users")
+    print("  2. Clear test users")
+    print("  3. Show statistics")
+    print("  4. Exit")
+    print("=" * 60)
+    
+    while True:
+        choice = input("\nEnter your choice (1-4): ").strip()
+        
+        if choice == "1":
+            try:
+                count = input("How many test users to add? (default: 100): ").strip()
+                count = int(count) if count else 100
+                
+                if count > 1000:
+                    confirm = input(f"⚠️  You're about to add {count} users. Continue? (yes/no): ").strip().lower()
+                    if confirm not in ['yes', 'y']:
+                        print("Cancelled.")
+                        continue
+                
+                print(f"\n🔄 Adding {count} test users...")
+                added, skipped = generate_test_users(count)
+                print(f"\n✅ Done! Added {added} users, skipped {skipped}")
+                
+            except ValueError:
+                print("❌ Invalid number. Please enter a valid integer.")
+            except Exception as e:
+                print(f"❌ Error: {e}")
+        
+        elif choice == "2":
+            confirm = input("⚠️  This will delete ALL test users. Continue? (yes/no): ").strip().lower()
+            if confirm in ['yes', 'y']:
+                print("\n🔄 Clearing test users...")
+                deleted = clear_test_users()
+                print(f"\n✅ Deleted {deleted} test users")
+            else:
+                print("Cancelled.")
+        
+        elif choice == "3":
+            print("\n📊 Fetching statistics...")
+            show_user_stats()
+        
+        elif choice == "4":
+            print("\n👋 Goodbye!")
+            break
+        
+        else:
+            print("❌ Invalid choice. Please enter 1, 2, 3, or 4.")

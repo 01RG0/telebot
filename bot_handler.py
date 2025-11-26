@@ -128,11 +128,11 @@ def send_template_to_selected(chat_ids, template, delay=SEND_DELAY):
 def send_personalized_from_rows(rows, delay=SEND_DELAY):
     """
     Send personalized messages from imported rows
-    
+
     Args:
         rows: List of dicts {"target": <chat_id or name>, "message": <text>}
         delay: Delay between sends in seconds
-        
+
     Returns:
         Tuple (sent: list, failed: list)
     """
@@ -140,7 +140,58 @@ def send_personalized_from_rows(rows, delay=SEND_DELAY):
     for r in rows:
         target = r.get("target")
         message = r.get("message", "")
-        
+
+        # If target is numeric → treat as chat_id
+        if isinstance(target, (int,)) or (isinstance(target, str) and target.isdigit()):
+            cid = int(target)
+            ok, err = safe_send_message(cid, message)
+            if ok:
+                sent.append(cid)
+            else:
+                failed.append((cid, err))
+        else:
+            # Treat as name search
+            matches = db.find_users_by_name(str(target))
+            if not matches:
+                failed.append((target, "no matching user by name"))
+            else:
+                # Send to all matches
+                for cid, name in matches:
+                    ok, err = safe_send_message(cid, message)
+                    if ok:
+                        sent.append(cid)
+                    else:
+                        failed.append((cid, err))
+        time.sleep(delay)
+    return sent, failed
+
+
+def send_personalized_from_template(template, rows, delay=SEND_DELAY):
+    """
+    Send personalized messages using a template and data from rows
+
+    Args:
+        template: Message template string with {column_name} placeholders
+        rows: List of dicts with "target" and other data columns
+        delay: Delay between sends in seconds
+
+    Returns:
+        Tuple (sent: list, failed: list)
+    """
+    sent, failed = [], []
+    for r in rows:
+        target = r.get("target")
+        if not target:
+            failed.append((target, "Missing target"))
+            continue
+
+        # Format message using template and row data
+        try:
+            message = template.format(**r)
+        except KeyError as e:
+            failed.append((target, f"Missing placeholder data: {e}"))
+            continue
+
         # If target is numeric → treat as chat_id
         if isinstance(target, (int,)) or (isinstance(target, str) and target.isdigit()):
             cid = int(target)

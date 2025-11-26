@@ -6,7 +6,7 @@ import logging
 from config import LOG_FILE, LOG_LEVEL
 from database import db
 from bot_handler import bot, run_bot_forever
-from gui import AdminApp
+from legacy_code.gui import AdminApp
 
 # Configure logging
 logging.basicConfig(

@@ -6,6 +6,12 @@ import tkinter as tk
 from tkinter import filedialog, messagebox
 import pandas as pd
 import logging
+import sys
+import os
+
+# Add parent directory to path to allow importing from root
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from config import WINDOW_TITLE, WINDOW_SIZE, SEND_DELAY
 from database import db
 from bot_handler import send_template_to_selected, send_personalized_from_rows

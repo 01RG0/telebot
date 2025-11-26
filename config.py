@@ -20,7 +20,7 @@ SEND_DELAY = float(os.getenv("SEND_DELAY", "0.5"))  # seconds between sends
 WELCOME_MESSAGE = os.getenv("WELCOME_MESSAGE", "اهلا بيك في نظام المتابعة لمستر شادي الشرقاوي شكرا على ثقتك بنتمنى نكون عند حسن ظنك")
 
 # Logging Configuration
-LOG_FILE = os.getenv("LOG_FILE", "app.log")
+LOG_FILE = os.getenv("LOG_FILE", os.path.join("data", "app.log"))
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 
 # GUI Configuration

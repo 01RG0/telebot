@@ -4,6 +4,12 @@ Run this script if you have an existing users.db file and want to migrate to Mon
 """
 import sqlite3
 import logging
+import sys
+import os
+
+# Add parent directory to path to allow importing from root
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from database import db
 from config import MONGODB_URI, DATABASE_NAME
 
@@ -11,7 +17,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("migration")
 
 
-def migrate_sqlite_to_mongodb(sqlite_path="users.db"):
+def migrate_sqlite_to_mongodb(sqlite_path=os.path.join("..", "users.db")):
     """
     Migrate users from SQLite database to MongoDB
     
