@@ -56,28 +56,27 @@ class Database:
         """
         try:
             now = datetime.utcnow()
-            update_data = {
-                "name": name,
-                "updated_at": now,
-                "last_activity_at": now,
-                "last_activity_type": activity_type,
-                "status": "active"
+            update_doc = {
+                "$set": {
+                    "name": name,
+                    "updated_at": now,
+                    "last_activity_at": now,
+                    "last_activity_type": activity_type,
+                    "status": "active"
+                },
+                "$setOnInsert": {
+                    "joined_at": now,
+                    "message_count": 0
+                }
             }
 
             # Increment message count if it's a message activity
             if activity_type == "message":
-                update_data["$inc"] = {"message_count": 1}
+                update_doc["$inc"] = {"message_count": 1}
 
             self.users_collection.update_one(
                 {"chat_id": chat_id},
-                {
-                    "$set": update_data,
-                    "$setOnInsert": {
-                        "joined_at": now,
-                        "message_count": 1 if activity_type == "message" else 0,
-                        "status": "active"
-                    }
-                },
+                update_doc,
                 upsert=True
             )
             logger.info(f"User {chat_id} ({name}) added/updated with activity: {activity_type}")
