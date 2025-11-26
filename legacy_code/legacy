@@ -3,6 +3,12 @@ Bot-only entry point for headless server deployment (Railway, Heroku, etc.)
 This version runs without the GUI for cloud hosting
 """
 import logging
+import sys
+import os
+
+# Add parent directory to path to allow importing from root
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from config import LOG_FILE, LOG_LEVEL
 from database import db
 from bot_handler import bot, run_bot_forever
