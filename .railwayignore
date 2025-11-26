@@ -1,0 +1,12 @@
+# Files to ignore when deploying to Railway
+*.db
+users.db
+app.log
+*.log
+.env.example
+setup.bat
+start.bat
+migrate_to_mongodb.py
+REFACTORING_SUMMARY.md
+QUICK_REFERENCE.md
+temp/
