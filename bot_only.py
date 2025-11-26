@@ -1,0 +1,55 @@
+"""
+Bot-only entry point for headless server deployment (Railway, Heroku, etc.)
+This version runs without the GUI for cloud hosting
+"""
+import logging
+from config import LOG_FILE, LOG_LEVEL
+from database import db
+from bot_handler import bot, run_bot_forever
+
+# Configure logging
+logging.basicConfig(
+    level=getattr(logging, LOG_LEVEL),
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[
+        logging.FileHandler(LOG_FILE),
+        logging.StreamHandler()  # Also log to console for Railway logs
+    ]
+)
+logger = logging.getLogger("telegram_app")
+
+
+def main():
+    """Main application entry point for headless deployment"""
+    logger.info("=" * 50)
+    logger.info("Starting Telegram Bot (Headless Mode)")
+    logger.info("=" * 50)
+    
+    # Test bot connection
+    try:
+        bot_info = bot.get_me()
+        logger.info(f"Bot connected successfully: @{bot_info.username}")
+        logger.info(f"Bot ID: {bot_info.id}")
+        logger.info(f"Bot Name: {bot_info.first_name}")
+    except Exception as e:
+        logger.error(f"Failed to connect to Telegram: {e}")
+        raise
+    
+    # Test database connection
+    try:
+        logger.info("Testing MongoDB connection...")
+        # Simple test - get users count
+        users = db.get_users()
+        logger.info(f"MongoDB connected successfully. Current users: {len(users)}")
+    except Exception as e:
+        logger.error(f"Failed to connect to MongoDB: {e}")
+        raise
+    
+    # Start bot (blocking - runs forever)
+    logger.info("Starting bot polling...")
+    logger.info("Bot is now running. Press Ctrl+C to stop.")
+    run_bot_forever()
+
+
+if __name__ == "__main__":
+    main()
