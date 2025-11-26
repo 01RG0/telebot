@@ -1,0 +1,13 @@
+pymongo[srv]
+pyTelegramBotAPI
+os
+threading
+time
+logging
+sqlite3
+pathlib 
+telebot
+customtkinter 
+tkinter 
+tkinter 
+pandas  
