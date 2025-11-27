@@ -95,7 +95,9 @@ def users():
                          page=page,
                          per_page=per_page,
                          total_count=total_count,
-                         total_pages=total_pages)
+                         total_pages=total_pages,
+                         max=max,
+                         min=min)
 
 @app.route('/users/delete/<int:chat_id>')
 @login_required
