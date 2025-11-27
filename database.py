@@ -67,7 +67,8 @@ class Database:
                     "status": "active"
                 },
                 "$setOnInsert": {
-                    "joined_at": now
+                    "joined_at": now,
+                    "phone_number": None  # Initialize phone number as None for new users
                 }
             }
 
@@ -208,6 +209,74 @@ class Database:
         except Exception as e:
             logger.error(f"Failed to delete user {chat_id}: {e}")
             raise
+    
+    def has_phone_number(self, chat_id: int) -> bool:
+        """
+        Check if user has a phone number saved
+        
+        Args:
+            chat_id: Telegram chat ID
+            
+        Returns:
+            True if phone number exists and is not None, False otherwise
+        """
+        try:
+            user = self.users_collection.find_one(
+                {"chat_id": chat_id},
+                {"phone_number": 1, "_id": 0}
+            )
+            if user and user.get("phone_number"):
+                return True
+            return False
+        except Exception as e:
+            logger.error(f"Failed to check phone number for user {chat_id}: {e}")
+            return False
+    
+    def save_phone_number(self, chat_id: int, phone_number: str):
+        """
+        Save user's phone number
+        
+        Args:
+            chat_id: Telegram chat ID
+            phone_number: User's phone number
+        """
+        try:
+            result = self.users_collection.update_one(
+                {"chat_id": chat_id},
+                {
+                    "$set": {
+                        "phone_number": phone_number,
+                        "phone_verified_at": datetime.utcnow()
+                    }
+                }
+            )
+            if result.modified_count > 0 or result.matched_count > 0:
+                logger.info(f"Phone number saved for user {chat_id}: {phone_number}")
+            else:
+                logger.warning(f"User {chat_id} not found when saving phone number")
+        except Exception as e:
+            logger.error(f"Failed to save phone number for user {chat_id}: {e}")
+            raise
+    
+    def get_user_phone(self, chat_id: int) -> str:
+        """
+        Get user's phone number
+        
+        Args:
+            chat_id: Telegram chat ID
+            
+        Returns:
+            Phone number string or None if not found
+        """
+        try:
+            user = self.users_collection.find_one(
+                {"chat_id": chat_id},
+                {"phone_number": 1, "_id": 0}
+            )
+            return user.get("phone_number") if user else None
+        except Exception as e:
+            logger.error(f"Failed to get phone number for user {chat_id}: {e}")
+            return None
     
     def close(self):
         """Close MongoDB connection"""

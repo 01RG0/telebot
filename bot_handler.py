@@ -2,8 +2,10 @@
 Telegram bot handlers and message processing
 """
 import telebot
+from telebot import types
 import logging
 import time
+from functools import wraps
 from config import TELEGRAM_TOKEN, WELCOME_MESSAGE, SEND_DELAY
 from database import db
 
@@ -13,9 +15,101 @@ logger = logging.getLogger("telegram_app.bot")
 bot = telebot.TeleBot(TELEGRAM_TOKEN, parse_mode="HTML")
 
 
+def request_phone_number(chat_id):
+    """
+    Send a message requesting phone number with a contact button
+    
+    Args:
+        chat_id: Telegram chat ID
+    """
+    try:
+        # Create keyboard with contact request button
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        contact_button = types.KeyboardButton(text="مشاركة رقم الهاتف", request_contact=True)
+        keyboard.add(contact_button)
+        
+        message_text = (
+            "مرحباً! 👋\n\n"
+            "للمتابعة، يرجى مشاركة رقم هاتفك معنا.\n"
+            "اضغط على الزر أدناه لمشاركة رقمك."
+        )
+        
+        bot.send_message(chat_id, message_text, reply_markup=keyboard)
+        logger.info(f"Phone number request sent to user {chat_id}")
+    except Exception as e:
+        logger.error(f"Failed to request phone number from {chat_id}: {e}")
+
+
+def phone_required(handler_func):
+    """
+    Decorator to check if user has phone number before processing
+    If not, request phone number and skip handler
+    """
+    @wraps(handler_func)
+    def wrapper(message):
+        chat_id = message.chat.id
+        
+        # Check if user has phone number
+        if not db.has_phone_number(chat_id):
+            # Ensure user exists in database first
+            name = message.from_user.first_name or ""
+            db.add_or_update_user(chat_id, name, "message")
+            
+            # Request phone number
+            request_phone_number(chat_id)
+            return  # Don't process the original handler
+        
+        # User has phone number, proceed with handler
+        return handler_func(message)
+    
+    return wrapper
+
+
+@bot.message_handler(content_types=['contact'])
+def handle_contact(message):
+    """
+    Handle contact sharing (phone number)
+    Save phone number to database
+    """
+    try:
+        chat_id = message.chat.id
+        name = message.from_user.first_name or ""
+        
+        # Ensure user exists in database
+        db.add_or_update_user(chat_id, name, "contact_shared")
+        
+        # Check if contact is user's own phone number
+        if message.contact.user_id == message.from_user.id:
+            phone_number = message.contact.phone_number
+            
+            # Save phone number
+            db.save_phone_number(chat_id, phone_number)
+            
+            # Remove keyboard and send confirmation
+            remove_keyboard = types.ReplyKeyboardRemove()
+            bot.send_message(
+                chat_id,
+                f"✅ شكراً! تم حفظ رقم هاتفك: {phone_number}\n\n{WELCOME_MESSAGE}",
+                reply_markup=remove_keyboard
+            )
+            logger.info(f"Phone number saved for user {chat_id}: {phone_number}")
+        else:
+            # User shared someone else's contact
+            bot.send_message(
+                chat_id,
+                "⚠️ يرجى مشاركة رقم هاتفك الشخصي، وليس رقم شخص آخر."
+            )
+            request_phone_number(chat_id)
+            
+    except Exception as e:
+        logger.exception(f"Error handling contact from {chat_id}: {e}")
+        bot.send_message(chat_id, "حدث خطأ أثناء حفظ رقم هاتفك. يرجى المحاولة مرة أخرى.")
+
+
 @bot.message_handler(commands=["start"])
+@phone_required
 def on_start(message):
-    """Handle /start command"""
+    """Handle /start command - requires phone number"""
     try:
         chat_id = message.chat.id
         name = message.from_user.first_name or ""
@@ -27,9 +121,10 @@ def on_start(message):
 
 
 @bot.message_handler(func=lambda m: True)
+@phone_required
 def on_message(message):
     """
-    Handle all other messages
+    Handle all other messages - requires phone number
     Store chat_id + name on any message
     """
     try:
@@ -39,6 +134,7 @@ def on_message(message):
         bot.send_message(chat_id, WELCOME_MESSAGE)
     except Exception as e:
         logger.exception(f"Error in message handler: {e}")
+
 
 
 def run_bot_forever():
