@@ -191,6 +191,28 @@ class Database:
         except Exception as e:
             logger.error(f"Failed to get users with phones: {e}")
             return []
+
+    def get_users_without_phone(self):
+        """
+        Get all users who don't have a phone number
+        
+        Returns:
+            List of chat_ids
+        """
+        try:
+            # Find users where phone_number is null or empty string or doesn't exist
+            query = {
+                "$or": [
+                    {"phone_number": None},
+                    {"phone_number": ""},
+                    {"phone_number": {"$exists": False}}
+                ]
+            }
+            users = self.users_collection.find(query, {"chat_id": 1, "_id": 0})
+            return [user["chat_id"] for user in users]
+        except Exception as e:
+            logger.error(f"Failed to get users without phone: {e}")
+            return []
     
     def get_user_by_chat(self, chat_id: int):
         """

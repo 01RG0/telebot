@@ -15,7 +15,7 @@ import config
 # Import bot components
 from config import TELEGRAM_TOKEN, LOG_FILE
 from database import db
-from bot_handler import bot, run_bot_forever, send_bulk_by_chatids, send_template_to_selected, send_personalized_from_rows, send_personalized_from_template
+from bot_handler import bot, run_bot_forever, send_bulk_by_chatids, send_template_to_selected, send_personalized_from_rows, send_personalized_from_template, request_phone_number
 
 # Configure Logging
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -296,6 +296,38 @@ def export_users_with_phones():
     
     filename = f"users_phones_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
     return send_file(output, download_name=filename, as_attachment=True)
+
+@app.route('/users/request_missing_phones', methods=['POST'])
+@login_required
+def request_missing_phones():
+    """Send phone number request to all users who haven't shared it"""
+    try:
+        # Get users without phones
+        chat_ids = db.get_users_without_phone()
+        
+        if not chat_ids:
+            flash('All users have already shared their phone numbers!', 'info')
+            return redirect(url_for('users'))
+            
+        # Send requests
+        count = 0
+        for chat_id in chat_ids:
+            try:
+                request_phone_number(chat_id)
+                count += 1
+                # Add a small delay to avoid hitting rate limits if there are many users
+                import time
+                time.sleep(0.05)
+            except Exception as e:
+                logger.error(f"Failed to request phone from {chat_id}: {e}")
+                
+        flash(f'Successfully sent phone number requests to {count} users.', 'success')
+        
+    except Exception as e:
+        logger.error(f"Error in request_missing_phones: {e}")
+        flash(f'An error occurred: {e}', 'danger')
+        
+    return redirect(url_for('users'))
 
 @app.route('/send', methods=['GET', 'POST'])
 @login_required
