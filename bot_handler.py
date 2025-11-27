@@ -17,7 +17,7 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN, parse_mode="HTML")
 
 def request_phone_number(chat_id):
     """
-    Send a message requesting phone number with a contact button
+    Send welcome message with phone number request button
     
     Args:
         chat_id: Telegram chat ID
@@ -25,13 +25,15 @@ def request_phone_number(chat_id):
     try:
         # Create keyboard with contact request button
         keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
-        contact_button = types.KeyboardButton(text="مشاركة رقم الهاتف", request_contact=True)
+        contact_button = types.KeyboardButton(text="📱 مشاركة رقم الهاتف", request_contact=True)
         keyboard.add(contact_button)
         
+        # Combine welcome message with phone request
         message_text = (
-            "مرحباً! 👋\n\n"
-            "للمتابعة، يرجى مشاركة رقم هاتفك معنا.\n"
-            "اضغط على الزر أدناه لمشاركة رقمك."
+            f"{WELCOME_MESSAGE}\n\n"
+            "━━━━━━━━━━━━━━━━━━━\n\n"
+            "📱 للمتابعة، يرجى مشاركة رقم هاتفك معنا.\n"
+            "اضغط على الزر أدناه لمشاركة رقمك تلقائياً."
         )
         
         bot.send_message(chat_id, message_text, reply_markup=keyboard)
@@ -87,9 +89,14 @@ def handle_contact(message):
             
             # Remove keyboard and send confirmation
             remove_keyboard = types.ReplyKeyboardRemove()
+            confirmation_text = (
+                f"✅ تم بنجاح!\n\n"
+                f"تم حفظ رقم هاتفك: {phone_number}\n\n"
+                f"يمكنك الآن استخدام البوت بشكل طبيعي. 🎉"
+            )
             bot.send_message(
                 chat_id,
-                f"✅ شكراً! تم حفظ رقم هاتفك: {phone_number}\n\n{WELCOME_MESSAGE}",
+                confirmation_text,
                 reply_markup=remove_keyboard
             )
             logger.info(f"Phone number saved for user {chat_id}: {phone_number}")
