@@ -5,7 +5,6 @@ import telebot
 from telebot import types
 import logging
 import time
-import re
 from functools import wraps
 from config import TELEGRAM_TOKEN, WELCOME_MESSAGE, SEND_DELAY
 from database import db
@@ -18,25 +17,21 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN, parse_mode="HTML")
 
 def request_phone_number(chat_id):
     """
-    Send a message requesting phone number with an inline button
+    Send a message requesting phone number with a contact button
     
     Args:
         chat_id: Telegram chat ID
     """
     try:
-        # Create inline keyboard with button
-        keyboard = types.InlineKeyboardMarkup()
-        phone_button = types.InlineKeyboardButton(
-            text="📱 مشاركة رقم الهاتف",
-            callback_data="request_phone"
-        )
-        keyboard.add(phone_button)
+        # Create keyboard with contact request button
+        keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True, one_time_keyboard=True)
+        contact_button = types.KeyboardButton(text="مشاركة رقم الهاتف", request_contact=True)
+        keyboard.add(contact_button)
         
         message_text = (
             "مرحباً! 👋\n\n"
-            "للمتابعة، يرجى مشاركة رقم هاتفك معنا.\n\n"
-            "اضغط على الزر أدناه ثم أرسل رقم هاتفك.\n"
-            "مثال: +201234567890"
+            "للمتابعة، يرجى مشاركة رقم هاتفك معنا.\n"
+            "اضغط على الزر أدناه لمشاركة رقمك."
         )
         
         bot.send_message(chat_id, message_text, reply_markup=keyboard)
@@ -70,81 +65,45 @@ def phone_required(handler_func):
     return wrapper
 
 
-@bot.callback_query_handler(func=lambda call: call.data == "request_phone")
-def handle_phone_button_click(call):
+@bot.message_handler(content_types=['contact'])
+def handle_contact(message):
     """
-    Handle inline button click for phone number request
-    """
-    try:
-        chat_id = call.message.chat.id
-        
-        # Answer the callback to remove loading state
-        bot.answer_callback_query(call.id)
-        
-        # Add user to tracking set
-        users_sharing_phone.add(chat_id)
-        
-        # Edit the message to show instructions
-        bot.edit_message_text(
-            chat_id=chat_id,
-            message_id=call.message.message_id,
-            text=(
-                "📱 *مشاركة رقم الهاتف*\n\n"
-                "الآن، يرجى إرسال رقم هاتفك.\n\n"
-                "يجب أن يبدأ الرقم بـ + ورمز الدولة\n"
-                "مثال: +201234567890\n\n"
-                "أرسل رقمك الآن 👇"
-            ),
-            parse_mode="Markdown"
-        )
-        
-        logger.info(f"User {chat_id} clicked phone request button")
-    except Exception as e:
-        logger.exception(f"Error handling phone button click: {e}")
-
-
-# Track users who are in the process of sharing phone
-users_sharing_phone = set()
-
-
-@bot.message_handler(func=lambda m: m.chat.id in users_sharing_phone and m.content_type == 'text')
-def handle_manual_phone_input(message):
-    """
-    Handle manual phone number input from users
+    Handle contact sharing (phone number)
+    Save phone number to database
     """
     try:
         chat_id = message.chat.id
-        phone_text = message.text.strip()
         name = message.from_user.first_name or ""
         
-        # Basic phone validation (starts with + and contains 10-15 digits)
-        if re.match(r'^\+\d{10,15}$', phone_text):
-            # Valid phone format
-            db.add_or_update_user(chat_id, name, "phone_shared")
-            db.save_phone_number(chat_id, phone_text)
+        # Ensure user exists in database
+        db.add_or_update_user(chat_id, name, "contact_shared")
+        
+        # Check if contact is user's own phone number
+        if message.contact.user_id == message.from_user.id:
+            phone_number = message.contact.phone_number
             
-            # Remove from tracking set
-            users_sharing_phone.discard(chat_id)
+            # Save phone number
+            db.save_phone_number(chat_id, phone_number)
             
-            # Send confirmation
+            # Remove keyboard and send confirmation
+            remove_keyboard = types.ReplyKeyboardRemove()
             bot.send_message(
                 chat_id,
-                f"✅ شكراً! تم حفظ رقم هاتفك: {phone_text}\n\n{WELCOME_MESSAGE}"
+                f"✅ شكراً! تم حفظ رقم هاتفك: {phone_number}\n\n{WELCOME_MESSAGE}",
+                reply_markup=remove_keyboard
             )
-            logger.info(f"Phone number saved for user {chat_id}: {phone_text}")
+            logger.info(f"Phone number saved for user {chat_id}: {phone_number}")
         else:
-            # Invalid format
+            # User shared someone else's contact
             bot.send_message(
                 chat_id,
-                "❌ رقم الهاتف غير صحيح!\n\n"
-                "يجب أن يبدأ بـ + ورمز الدولة\n"
-                "مثال: +201234567890\n\n"
-                "يرجى المحاولة مرة أخرى:"
+                "⚠️ يرجى مشاركة رقم هاتفك الشخصي، وليس رقم شخص آخر."
             )
+            request_phone_number(chat_id)
+            
     except Exception as e:
-        logger.exception(f"Error handling manual phone input: {e}")
+        logger.exception(f"Error handling contact from {chat_id}: {e}")
         bot.send_message(chat_id, "حدث خطأ أثناء حفظ رقم هاتفك. يرجى المحاولة مرة أخرى.")
-
 
 
 @bot.message_handler(commands=["start"])
