@@ -259,6 +259,44 @@ def export_users():
     
     return send_file(output, download_name="users_export.xlsx", as_attachment=True)
 
+@app.route('/export/phones')
+@login_required
+def export_users_with_phones():
+    """Export users with phone numbers to Excel"""
+    users = db.get_users_with_phones()
+    
+    # Prepare data for DataFrame
+    data = []
+    for chat_id, name, phone, phone_verified_at, joined_at in users:
+        # Only include users with phone numbers
+        if phone:
+            data.append({
+                'Chat ID': chat_id,
+                'Phone Number': phone
+            })
+    
+    df = pd.DataFrame(data)
+    
+    # Create Excel file
+    output = BytesIO()
+    writer = pd.ExcelWriter(output, engine='openpyxl')
+    df.to_excel(writer, index=False, sheet_name='Users with Phones')
+    
+    # Auto-adjust column widths
+    worksheet = writer.sheets['Users with Phones']
+    for idx, col in enumerate(df.columns):
+        max_length = max(
+            df[col].astype(str).apply(len).max(),
+            len(col)
+        ) + 2
+        worksheet.column_dimensions[chr(65 + idx)].width = max_length
+    
+    writer.close()
+    output.seek(0)
+    
+    filename = f"users_phones_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.xlsx"
+    return send_file(output, download_name=filename, as_attachment=True)
+
 @app.route('/send', methods=['GET', 'POST'])
 @login_required
 def send_message():

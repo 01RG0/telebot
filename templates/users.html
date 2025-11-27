@@ -4,9 +4,14 @@
 <div class="d-flex justify-content-between align-items-center mb-4">
     <h2>User Management</h2>
     <div>
-        <a href="{{ url_for('export_users') }}" class="btn btn-success me-2"><i class="fas fa-file-excel"></i> Export</a>
-        <button id="bulkDeleteBtn" class="btn btn-danger" style="display:none;"><i class="fas fa-trash"></i> Delete Selected</button>
-        <button id="bulkMessageBtn" class="btn btn-primary" style="display:none;"><i class="fas fa-envelope"></i> Message Selected</button>
+        <a href="{{ url_for('export_users') }}" class="btn btn-success me-2"><i class="fas fa-file-excel"></i> Export
+            Users</a>
+        <a href="{{ url_for('export_users_with_phones') }}" class="btn btn-primary me-2"><i class="fas fa-phone"></i>
+            Export with Phones</a>
+        <button id="bulkDeleteBtn" class="btn btn-danger" style="display:none;"><i class="fas fa-trash"></i> Delete
+            Selected</button>
+        <button id="bulkMessageBtn" class="btn btn-primary" style="display:none;"><i class="fas fa-envelope"></i>
+            Message Selected</button>
     </div>
 </div>
 
@@ -16,22 +21,23 @@
         <form method="GET" action="{{ url_for('users') }}" class="row g-3">
             <div class="col-md-4">
                 <label class="form-label">Search</label>
-                <input type="text" name="search" class="form-control" placeholder="Name or Chat ID" value="{{ search }}">
+                <input type="text" name="search" class="form-control" placeholder="Name or Chat ID"
+                    value="{{ search }}">
             </div>
             <div class="col-md-3">
                 <label class="form-label">Status</label>
                 <select name="status" class="form-select">
                     <option value="">All Status</option>
-                    <option value="active" {% if status_filter == 'active' %}selected{% endif %}>Active</option>
-                    <option value="inactive" {% if status_filter == 'inactive' %}selected{% endif %}>Inactive</option>
+                    <option value="active" {% if status_filter=='active' %}selected{% endif %}>Active</option>
+                    <option value="inactive" {% if status_filter=='inactive' %}selected{% endif %}>Inactive</option>
                 </select>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Per Page</label>
                 <select name="per_page" class="form-select">
-                    <option value="25" {% if per_page == 25 %}selected{% endif %}>25</option>
-                    <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
-                    <option value="100" {% if per_page == 100 %}selected{% endif %}>100</option>
+                    <option value="25" {% if per_page==25 %}selected{% endif %}>25</option>
+                    <option value="50" {% if per_page==50 %}selected{% endif %}>50</option>
+                    <option value="100" {% if per_page==100 %}selected{% endif %}>100</option>
                 </select>
             </div>
             <div class="col-md-3 d-flex align-items-end">
@@ -49,7 +55,8 @@
             <span>Users ({{ total_count }} total)</span>
             <div>
                 <button id="selectAllBtn" class="btn btn-sm btn-outline-primary">Select All</button>
-                <button id="deselectAllBtn" class="btn btn-sm btn-outline-secondary" style="display:none;">Deselect All</button>
+                <button id="deselectAllBtn" class="btn btn-sm btn-outline-secondary" style="display:none;">Deselect
+                    All</button>
             </div>
         </div>
     </div>
@@ -104,102 +111,105 @@
         <ul class="pagination">
             {% if page > 1 %}
             <li class="page-item">
-                <a class="page-link" href="{{ url_for('users', search=search, status=status_filter, page=page-1, per_page=per_page) }}">Previous</a>
+                <a class="page-link"
+                    href="{{ url_for('users', search=search, status=status_filter, page=page-1, per_page=per_page) }}">Previous</a>
             </li>
             {% endif %}
 
             {% for page_num in range(max(1, page-2), min(total_pages+1, page+3)) %}
             <li class="page-item {% if page_num == page %}active{% endif %}">
-                <a class="page-link" href="{{ url_for('users', search=search, status=status_filter, page=page_num, per_page=per_page) }}">{{ page_num }}</a>
+                <a class="page-link"
+                    href="{{ url_for('users', search=search, status=status_filter, page=page_num, per_page=per_page) }}">{{
+                    page_num }}</a>
             </li>
             {% endfor %}
 
-            {% if page < total_pages %}
-            <li class="page-item">
-                <a class="page-link" href="{{ url_for('users', search=search, status=status_filter, page=page+1, per_page=per_page) }}">Next</a>
-            </li>
-            {% endif %}
+            {% if page < total_pages %} <li class="page-item">
+                <a class="page-link"
+                    href="{{ url_for('users', search=search, status=status_filter, page=page+1, per_page=per_page) }}">Next</a>
+                </li>
+                {% endif %}
         </ul>
     </nav>
 </div>
 {% endif %}
 
 <script>
-// Bulk selection functionality
-document.getElementById('masterCheckbox').addEventListener('change', function() {
-    const checkboxes = document.querySelectorAll('.userCheckbox');
-    checkboxes.forEach(cb => cb.checked = this.checked);
-    updateBulkButtons();
-});
+    // Bulk selection functionality
+    document.getElementById('masterCheckbox').addEventListener('change', function () {
+        const checkboxes = document.querySelectorAll('.userCheckbox');
+        checkboxes.forEach(cb => cb.checked = this.checked);
+        updateBulkButtons();
+    });
 
-document.getElementById('selectAllBtn').addEventListener('click', function() {
-    const checkboxes = document.querySelectorAll('.userCheckbox');
-    checkboxes.forEach(cb => cb.checked = true);
-    document.getElementById('masterCheckbox').checked = true;
-    updateBulkButtons();
-});
+    document.getElementById('selectAllBtn').addEventListener('click', function () {
+        const checkboxes = document.querySelectorAll('.userCheckbox');
+        checkboxes.forEach(cb => cb.checked = true);
+        document.getElementById('masterCheckbox').checked = true;
+        updateBulkButtons();
+    });
 
-document.getElementById('deselectAllBtn').addEventListener('click', function() {
-    const checkboxes = document.querySelectorAll('.userCheckbox');
-    checkboxes.forEach(cb => cb.checked = false);
-    document.getElementById('masterCheckbox').checked = false;
-    updateBulkButtons();
-});
+    document.getElementById('deselectAllBtn').addEventListener('click', function () {
+        const checkboxes = document.querySelectorAll('.userCheckbox');
+        checkboxes.forEach(cb => cb.checked = false);
+        document.getElementById('masterCheckbox').checked = false;
+        updateBulkButtons();
+    });
 
-document.querySelectorAll('.userCheckbox').forEach(cb => {
-    cb.addEventListener('change', updateBulkButtons);
-});
+    document.querySelectorAll('.userCheckbox').forEach(cb => {
+        cb.addEventListener('change', updateBulkButtons);
+    });
 
-function updateBulkButtons() {
-    const checkedBoxes = document.querySelectorAll('.userCheckbox:checked');
-    const bulkButtons = document.querySelectorAll('#bulkDeleteBtn, #bulkMessageBtn');
-    const selectAllBtn = document.getElementById('selectAllBtn');
-    const deselectAllBtn = document.getElementById('deselectAllBtn');
+    function updateBulkButtons() {
+        const checkedBoxes = document.querySelectorAll('.userCheckbox:checked');
+        const bulkButtons = document.querySelectorAll('#bulkDeleteBtn, #bulkMessageBtn');
+        const selectAllBtn = document.getElementById('selectAllBtn');
+        const deselectAllBtn = document.getElementById('deselectAllBtn');
 
-    if (checkedBoxes.length > 0) {
-        bulkButtons.forEach(btn => btn.style.display = 'inline-block');
-        selectAllBtn.style.display = 'none';
-        deselectAllBtn.style.display = 'inline-block';
-    } else {
-        bulkButtons.forEach(btn => btn.style.display = 'none');
-        selectAllBtn.style.display = 'inline-block';
-        deselectAllBtn.style.display = 'none';
+        if (checkedBoxes.length > 0) {
+            bulkButtons.forEach(btn => btn.style.display = 'inline-block');
+            selectAllBtn.style.display = 'none';
+            deselectAllBtn.style.display = 'inline-block';
+        } else {
+            bulkButtons.forEach(btn => btn.style.display = 'none');
+            selectAllBtn.style.display = 'inline-block';
+            deselectAllBtn.style.display = 'none';
+        }
     }
-}
 
-// Bulk delete functionality
-document.getElementById('bulkDeleteBtn').addEventListener('click', function() {
-    const selectedIds = Array.from(document.querySelectorAll('.userCheckbox:checked')).map(cb => cb.value);
-    if (selectedIds.length === 0) return;
+    // Bulk delete functionality
+    document.getElementById('bulkDeleteBtn').addEventListener('click', function () {
+        const selectedIds = Array.from(document.querySelectorAll('.userCheckbox:checked')).map(cb => cb.value);
+        if (selectedIds.length === 0) return;
 
-    if (confirm(`Delete ${selectedIds.length} selected users?`)) {
-        // Submit bulk delete form
-        const form = document.createElement('form');
-        form.method = 'POST';
-        form.action = '{{ url_for("bulk_delete") }}';
+        if (confirm(`Delete ${selectedIds.length} selected users?`)) {
+            // Submit bulk delete form
+            const form = document.createElement('form');
+            form.method = 'POST';
+            form.action = '{{ url_for("bulk_delete") }}';
 
-        selectedIds.forEach(id => {
-            const input = document.createElement('input');
-            input.type = 'hidden';
-            input.name = 'chat_ids';
-            input.value = id;
-            form.appendChild(input);
-        });
+            selectedIds.forEach(id => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'chat_ids';
+                input.value = id;
+                form.appendChild(input);
+            });
 
-        document.body.appendChild(form);
-        form.submit();
-    }
-});
+            document.body.appendChild(form);
+            form.submit();
+        }
+    });
 
-// Bulk message functionality
-document.getElementById('bulkMessageBtn').addEventListener('click', function() {
-    const selectedIds = Array.from(document.querySelectorAll('.userCheckbox:checked')).map(cb => cb.value);
-    if (selectedIds.length === 0) return;
+    // Bulk message functionality
+    document.getElementById('bulkMessageBtn').addEventListener('click', function () {
+        const selectedIds = Array.from(document.querySelectorAll('.userCheckbox:checked')).map(cb => cb.value);
+        if (selectedIds.length === 0) return;
 
-    // Redirect to send page with selected users
-    const params = new URLSearchParams();
-    selectedIds.forEach(id => params.append('selected_users', id));
-    window.location.href = '{{ url_for("send_message") }}?' + params.toString();
-});
+        // Redirect to send page with selected users
+        const params = new URLSearchParams();
+        selectedIds.forEach(id => params.append('selected_users', id));
+        window.location.href = '{{ url_for("send_message") }}?' + params.toString();
+    });
 </script>
 {% endblock %}

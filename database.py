@@ -155,6 +155,41 @@ class Database:
         users, _, _ = self.get_users()
         return [(chat_id, name) for chat_id, name, _, _, _, _ in users]
     
+    def get_users_with_phones(self):
+        """
+        Get all users with their phone numbers for export
+        
+        Returns:
+            List of tuples (chat_id, name, phone_number, phone_verified_at)
+        """
+        try:
+            users = self.users_collection.find(
+                {},
+                {
+                    "chat_id": 1,
+                    "name": 1,
+                    "phone_number": 1,
+                    "phone_verified_at": 1,
+                    "joined_at": 1,
+                    "_id": 0
+                }
+            ).sort("name", 1)
+            
+            users_list = []
+            for user in users:
+                users_list.append((
+                    user.get("chat_id"),
+                    user.get("name", ""),
+                    user.get("phone_number", ""),
+                    user.get("phone_verified_at"),
+                    user.get("joined_at")
+                ))
+            
+            return users_list
+        except Exception as e:
+            logger.error(f"Failed to get users with phones: {e}")
+            return []
+    
     def get_user_by_chat(self, chat_id: int):
         """
         Get user by chat ID
