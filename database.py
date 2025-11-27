@@ -126,6 +126,7 @@ class Database:
             users = self.users_collection.find(query, {
                 "chat_id": 1, "name": 1, "joined_at": 1,
                 "last_activity_at": 1, "message_count": 1, "status": 1,
+                "phone_number": 1,
                 "_id": 0
             }).sort("last_activity_at", -1).skip(skip).limit(per_page)
 
@@ -137,7 +138,8 @@ class Database:
                     user.get("joined_at"),
                     user.get("last_activity_at"),
                     user.get("message_count", 0),
-                    user.get("status", "unknown")
+                    user.get("status", "unknown"),
+                    user.get("phone_number", "")
                 ))
 
             return users_list, total_count, total_pages
@@ -153,7 +155,7 @@ class Database:
             List of tuples (chat_id, name)
         """
         users, _, _ = self.get_users()
-        return [(chat_id, name) for chat_id, name, _, _, _, _ in users]
+        return [(user[0], user[1]) for user in users]
     
     def get_users_with_phones(self):
         """

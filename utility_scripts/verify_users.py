@@ -21,7 +21,8 @@ def verify_test_users():
     print("=" * 70)
     
     # Get all users
-    all_users = db.get_users()
+    all_users_data = db.get_users()
+    all_users = all_users_data[0]
     
     if not all_users:
         print("\n⚠️  No users found in database!")
@@ -42,14 +43,19 @@ def verify_test_users():
     if real_users:
         print(f"\n👥 REAL USERS ({len(real_users)}):")
         print("-" * 70)
-        for chat_id, name in real_users:
-            print(f"   ✓ {name:<30} | ID: {chat_id}")
+        for user in real_users:
+            chat_id = user[0]
+            name = user[1]
+            phone = user[6]
+            print(f"   ✓ {name:<30} | ID: {chat_id} | Phone: {phone}")
     
     # Display test users
     if test_users:
         print(f"\n🧪 TEST USERS ({len(test_users)}):")
         print("-" * 70)
-        for chat_id, name in test_users:
+        for user in test_users:
+            chat_id = user[0]
+            name = user[1]
             print(f"   • {name:<30} | ID: {chat_id}")
     
     print("\n" + "=" * 70)
