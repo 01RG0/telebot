@@ -56,6 +56,8 @@ class Database:
         """
         try:
             now = datetime.utcnow()
+            
+            # Build the update document
             update_doc = {
                 "$set": {
                     "name": name,
@@ -65,14 +67,17 @@ class Database:
                     "status": "active"
                 },
                 "$setOnInsert": {
-                    "joined_at": now,
-                    "message_count": 0
+                    "joined_at": now
                 }
             }
 
-            # Increment message count if it's a message activity
+            # Handle message_count to avoid conflicts between $setOnInsert and $inc
             if activity_type == "message":
+                # Use $inc which will auto-initialize to 0 then increment to 1 for new users
                 update_doc["$inc"] = {"message_count": 1}
+            else:
+                # For non-message activities, just initialize to 0 for new users
+                update_doc["$setOnInsert"]["message_count"] = 0
 
             self.users_collection.update_one(
                 {"chat_id": chat_id},
