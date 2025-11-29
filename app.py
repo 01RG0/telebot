@@ -5,12 +5,13 @@ import os
 import logging
 import threading
 import pandas as pd
-from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file
+from flask import Flask, render_template, request, redirect, url_for, session, flash, send_file, jsonify
 from werkzeug.utils import secure_filename
 from functools import wraps
 from io import BytesIO, StringIO
 from datetime import datetime
 import config
+import tempfile
 
 # Import bot components
 from config import TELEGRAM_TOKEN, LOG_FILE
@@ -351,22 +352,103 @@ def send_message():
                 flash(f"Sent: {len(sent)}, Failed: {len(failed)}", 'info')
             
         elif action == 'excel':
-            file = request.files['file']
+            file_path = request.form.get('file_path')
+            target_column = request.form.get('target_column')
+            custom_columns = request.form.getlist('custom_columns')
             template = request.form.get('template')
-            if file and file.filename.endswith('.xlsx') and template:
+            
+            if not file_path or not target_column or not template:
+                flash("Missing required fields: file path, target column, or template", 'danger')
+                return render_template('send.html')
+            
+            try:
+                # Read the Excel file
+                df = pd.read_excel(file_path)
+                
+                # Validate columns exist
+                if target_column not in df.columns:
+                    flash(f"Target column '{target_column}' not found in file", 'danger')
+                    return render_template('send.html')
+                
+                for col in custom_columns:
+                    if col not in df.columns:
+                        flash(f"Column '{col}' not found in file", 'danger')
+                        return render_template('send.html')
+                
+                # Prepare rows with renamed target column
+                rows = []
+                for idx, row in df.iterrows():
+                    row_dict = row.to_dict()
+                    # Create new dict with 'target' key pointing to target_column value
+                    prepared_row = {
+                        'target': row_dict.get(target_column),
+                    }
+                    # Add selected custom columns
+                    for col in custom_columns:
+                        prepared_row[col] = row_dict.get(col)
+                    rows.append(prepared_row)
+                
+                # Send personalized messages
+                sent, failed = send_personalized_from_template(template, rows)
+                flash(f"Personalized Send - Sent: {len(sent)}, Failed: {len(failed)}", 'success')
+                
+                # Clean up temp file
                 try:
-                    df = pd.read_excel(file)
-                    # Convert to list of dicts with all columns
-                    rows = df.to_dict('records')
-
-                    sent, failed = send_personalized_from_template(template, rows)
-                    flash(f"Personalized Send - Sent: {len(sent)}, Failed: {len(failed)}", 'success')
-                except Exception as e:
-                    flash(f"Error processing file: {e}", 'danger')
-            else:
-                flash("Invalid file or missing template. Please upload .xlsx and provide message template", 'danger')
+                    os.remove(file_path)
+                except:
+                    pass
+                    
+            except Exception as e:
+                logger.error(f"Error processing Excel file: {e}")
+                flash(f"Error processing file: {e}", 'danger')
                 
     return render_template('send.html')
+
+@app.route('/preview-excel', methods=['POST'])
+@login_required
+def preview_excel():
+    """Preview Excel file and return column names and sample data"""
+    try:
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        
+        file = request.files['file']
+        
+        if not file or not file.filename.endswith('.xlsx'):
+            return jsonify({'error': 'Please upload an .xlsx file'}), 400
+        
+        # Save to temporary file
+        temp_fd, temp_path = tempfile.mkstemp(suffix='.xlsx')
+        os.close(temp_fd)
+        file.save(temp_path)
+        
+        # Read Excel file
+        df = pd.read_excel(temp_path)
+        
+        if df.empty:
+            os.remove(temp_path)
+            return jsonify({'error': 'Excel file is empty'}), 400
+        
+        columns = list(df.columns)
+        sample_data = df.iloc[0].to_dict()
+        
+        # Convert sample data to serializable format
+        sample_data_serialized = {}
+        for key, value in sample_data.items():
+            if pd.isna(value):
+                sample_data_serialized[key] = '[empty]'
+            else:
+                sample_data_serialized[key] = str(value)
+        
+        return jsonify({
+            'columns': columns,
+            'sample_data': sample_data_serialized,
+            'file_path': temp_path
+        })
+    
+    except Exception as e:
+        logger.error(f"Error previewing Excel file: {e}")
+        return jsonify({'error': f'Error reading file: {str(e)}'}), 400
 
 @app.route('/logs')
 @login_required

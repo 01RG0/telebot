@@ -45,33 +45,234 @@
                 <h5><i class="fas fa-file-excel"></i> Send from Excel</h5>
             </div>
             <div class="card-body">
-                <form method="POST" action="{{ url_for('send_message') }}" enctype="multipart/form-data">
+                <!-- Step 1: Upload and Map Columns -->
+                <form method="POST" action="{{ url_for('preview_excel') }}" enctype="multipart/form-data" id="uploadForm">
                     <input type="hidden" name="action" value="excel">
 
                     <div class="mb-3">
-                        <label class="form-label">Message Template</label>
-                        <textarea name="template" class="form-control" rows="3"
-                            placeholder="Hello {name}! Your data: {custom_field}..." required></textarea>
-                        <div class="form-text">Use column names from Excel as placeholders, e.g., <code>{name}</code>, <code>{phone}</code>, <code>{data}</code></div>
-                    </div>
-
-                    <div class="mb-3">
                         <label class="form-label">Upload Excel File</label>
-                        <input type="file" name="file" class="form-control" accept=".xlsx" required>
-                        <div class="form-text">File must have a <code>target</code> column and any additional data columns</div>
+                        <input type="file" name="file" class="form-control" accept=".xlsx" id="excelFile" required>
+                        <div class="form-text">Upload your Excel file to preview columns</div>
                     </div>
 
-                    <div class="alert alert-info">
-                        <strong>Format Guide:</strong><br>
-                        Column A: <code>target</code> (Chat ID or Name)<br>
-                        Other columns: Your custom data (e.g., name, phone, data, etc.)<br>
-                        The message template will be personalized for each row.
+                    <button type="submit" class="btn btn-info w-100" id="previewBtn">
+                        <i class="fas fa-eye"></i> Preview & Map Columns
+                    </button>
+                </form>
+
+                <div class="alert alert-info mt-3">
+                    <strong>How it works:</strong><br>
+                    1. Upload your Excel file<br>
+                    2. Select which column contains Chat IDs/Phone (target)<br>
+                    3. Select custom data columns to use in template<br>
+                    4. Enter message template with {column_name} placeholders<br>
+                    5. Send personalized messages!
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Column Mapping Modal -->
+<div class="modal fade" id="columnMapModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title">Map Excel Columns</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form method="POST" action="{{ url_for('send_message') }}" enctype="multipart/form-data" id="sendForm">
+                    <input type="hidden" name="action" value="excel">
+                    <input type="hidden" name="file_path" id="filePath">
+
+                    <!-- Target Column Selection -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Step 1: Select Target Column</h6>
+                        <p class="text-muted">Choose the column containing Chat IDs or Parent Phone Numbers</p>
+                        <div class="form-group" id="targetColumnGroup">
+                            <!-- Populated by JavaScript -->
+                        </div>
                     </div>
 
-                    <button type="submit" class="btn btn-success w-100">Upload & Send Personalized</button>
+                    <hr>
+
+                    <!-- Custom Columns Selection -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Step 2: Select Custom Data Columns</h6>
+                        <p class="text-muted">Choose columns to use in your message template</p>
+                        <div id="customColumnsGroup">
+                            <!-- Populated by JavaScript -->
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Message Template -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Step 3: Create Message Template</h6>
+                        <label class="form-label">Message Template</label>
+                        <textarea name="template" class="form-control" rows="5" 
+                            placeholder="Hello {name}! Your phone: {phone}. Parent: {parent_phone}" required></textarea>
+                        <div class="form-text">Use column names as placeholders: <code>{column_name}</code></div>
+                        
+                        <!-- Available placeholders hint -->
+                        <div class="mt-2 p-2 bg-light rounded">
+                            <small><strong>Available placeholders:</strong></small>
+                            <div id="placeholderHint" class="mt-1">
+                                <!-- Populated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <!-- Preview -->
+                    <div class="mb-4">
+                        <h6 class="fw-bold">Preview (First Row)</h6>
+                        <div class="p-3 bg-light rounded" id="messagePreview">
+                            <em class="text-muted">Preview will appear here...</em>
+                        </div>
+                    </div>
+
+                    <div class="d-flex gap-2">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                        <button type="submit" class="btn btn-success ms-auto">
+                            <i class="fas fa-paper-plane"></i> Send Personalized Messages
+                        </button>
+                    </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+// Handle file preview and column mapping
+document.getElementById('uploadForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const fileInput = document.getElementById('excelFile');
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        alert('Please select a file');
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('action', 'preview');
+
+    try {
+        const response = await fetch('{{ url_for("preview_excel") }}', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.error) {
+            alert('Error: ' + data.error);
+            return;
+        }
+
+        // Store file path for later submission
+        document.getElementById('filePath').value = data.file_path;
+
+        // Populate column selections
+        populateColumnSelections(data.columns, data.sample_data);
+
+        // Show modal
+        const modal = new bootstrap.Modal(document.getElementById('columnMapModal'));
+        modal.show();
+
+    } catch (error) {
+        alert('Error uploading file: ' + error.message);
+    }
+});
+
+function populateColumnSelections(columns, sampleData) {
+    // Target column selection
+    const targetGroup = document.getElementById('targetColumnGroup');
+    targetGroup.innerHTML = columns.map(col => `
+        <div class="form-check">
+            <input class="form-check-input" type="radio" name="target_column" value="${col}" id="target_${col}">
+            <label class="form-check-label" for="target_${col}">
+                ${col}
+            </label>
+        </div>
+    `).join('');
+
+    // Custom columns checkboxes
+    const customGroup = document.getElementById('customColumnsGroup');
+    customGroup.innerHTML = columns.map(col => `
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="custom_columns" value="${col}" id="custom_${col}">
+            <label class="form-check-label" for="custom_${col}">
+                ${col}
+            </label>
+        </div>
+    `).join('');
+
+    // Update placeholder hint when custom columns change
+    const customCheckboxes = document.querySelectorAll('input[name="custom_columns"]');
+    const templateInput = document.querySelector('textarea[name="template"]');
+
+    function updatePlaceholderHint() {
+        const selected = Array.from(customCheckboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.value);
+        
+        const hint = document.getElementById('placeholderHint');
+        if (selected.length > 0) {
+            hint.innerHTML = selected.map(col => `<code>{${col}}</code>`).join(' ');
+        } else {
+            hint.innerHTML = '<em class="text-muted">Select columns above to see available placeholders</em>';
+        }
+
+        // Update preview
+        updatePreview(sampleData, selected, templateInput.value);
+    }
+
+    customCheckboxes.forEach(cb => cb.addEventListener('change', updatePlaceholderHint));
+    templateInput.addEventListener('input', () => {
+        const selected = Array.from(customCheckboxes).filter(cb => cb.checked).map(cb => cb.value);
+        updatePreview(sampleData, selected, templateInput.value);
+    });
+
+    // Initialize hint
+    updatePlaceholderHint();
+}
+
+function updatePreview(sampleData, selectedColumns, template) {
+    const preview = document.getElementById('messagePreview');
+    
+    if (!template || template.trim() === '') {
+        preview.innerHTML = '<em class="text-muted">Enter template to see preview...</em>';
+        return;
+    }
+
+    try {
+        // Create data object with only selected columns + target
+        const dataToUse = {};
+        selectedColumns.forEach(col => {
+            if (sampleData && sampleData[col] !== undefined) {
+                dataToUse[col] = sampleData[col];
+            }
+        });
+
+        // Simple template formatting
+        let previewText = template;
+        selectedColumns.forEach(col => {
+            const value = sampleData && sampleData[col] !== undefined ? sampleData[col] : `[${col}]`;
+            previewText = previewText.replace(new RegExp(`\\{${col}\\}`, 'g'), value);
+        });
+
+        preview.innerHTML = `<strong>Preview:</strong><br><pre class="mb-0">${previewText}</pre>`;
+    } catch (error) {
+        preview.innerHTML = `<span class="text-danger">Error in template: ${error.message}</span>`;
+    }
+}
+</script>
 {% endblock %}

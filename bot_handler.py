@@ -6,13 +6,30 @@ from telebot import types
 import logging
 import time
 from functools import wraps
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from config import TELEGRAM_TOKEN, WELCOME_MESSAGE, SEND_DELAY
 from database import db
 
 logger = logging.getLogger("telegram_app.bot")
 
-# Initialize bot
+# Initialize bot with resilient connection settings
 bot = telebot.TeleBot(TELEGRAM_TOKEN, parse_mode="HTML")
+
+# Configure session with retry strategy for better connection handling
+session = bot.session
+adapter = HTTPAdapter(
+    max_retries=Retry(
+        total=3,
+        backoff_factor=0.5,
+        status_forcelist=[500, 502, 503, 504],
+        allowed_methods=["HEAD", "GET", "PUT", "POST"]
+    ),
+    pool_connections=10,
+    pool_maxsize=10
+)
+session.mount('http://', adapter)
+session.mount('https://', adapter)
 
 
 def request_phone_number(chat_id):
@@ -145,14 +162,40 @@ def on_message(message):
 
 
 def run_bot_forever():
-    """Run bot with resilient polling loop"""
+    """Run bot with resilient polling loop and connection retry logic"""
+    retry_count = 0
+    max_retries = 10
+    base_backoff = 5
+    
     while True:
         try:
-            logger.info("Starting bot polling...")
-            bot.infinity_polling(timeout=30, long_polling_timeout=60)
+            logger.info(f"Starting bot polling... (retry: {retry_count})")
+            # Reset retry count on successful connection
+            retry_count = 0
+            bot.infinity_polling(
+                timeout=30,
+                long_polling_timeout=60,
+                skip_pending=True,
+                allowed_updates=None
+            )
+        except ConnectionError as e:
+            # Handle connection errors with exponential backoff
+            retry_count = min(retry_count + 1, max_retries)
+            backoff_time = base_backoff * (2 ** (retry_count - 1))
+            logger.error(f"Connection error (attempt {retry_count}/{max_retries}): {e}")
+            logger.info(f"Retrying in {backoff_time} seconds...")
+            time.sleep(backoff_time)
         except Exception as e:
-            logger.exception(f"Bot polling crashed, restarting: {e}")
-            time.sleep(5)
+            # Handle other exceptions
+            if "RemoteDisconnected" in str(type(e)):
+                retry_count = min(retry_count + 1, max_retries)
+                backoff_time = base_backoff * (2 ** (retry_count - 1))
+                logger.error(f"Remote disconnected (attempt {retry_count}/{max_retries}): {e}")
+                logger.info(f"Retrying in {backoff_time} seconds...")
+                time.sleep(backoff_time)
+            else:
+                logger.exception(f"Bot polling crashed: {e}")
+                time.sleep(5)
 
 
 def safe_send_message(chat_id, text):
