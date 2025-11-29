@@ -30,7 +30,7 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h5 class="card-title">Online ✅</h5>
+                        <h5 class="card-title">Online [OK]</h5>
                         <p class="card-text mb-0">
                             <small>{{ bot_name }}</small><br>
                             <small>@{{ bot_username }}</small>
@@ -52,6 +52,12 @@
                     </div>
                     <i class="fas fa-envelope fa-2x opacity-75"></i>
                 </div>
+                <div class="mt-2">
+                    <small class="text-white">
+                        <span id="successCount">0</span> sent • 
+                        <span id="failCount">0</span> failed
+                    </small>
+                </div>
             </div>
         </div>
     </div>
@@ -61,14 +67,18 @@
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h5 class="card-title">Quick Actions</h5>
-                        <div class="d-grid gap-1">
-                            <a href="{{ url_for('send_message') }}" class="btn btn-light btn-sm">Send Message</a>
-                            <a href="{{ url_for('export_users') }}" class="btn btn-light btn-sm">Export Users</a>
-                            <a href="{{ url_for('export_analytics') }}" class="btn btn-light btn-sm">Export Analytics</a>
-                        </div>
+                        <h5 class="card-title">System Status</h5>
+                        <p class="card-text mb-0">
+                            <small>
+                                Active: <span id="activeTasks">0</span><br>
+                                Pending: <span id="pendingTasks">0</span>
+                            </small>
+                        </p>
                     </div>
-                    <i class="fas fa-bolt fa-2x opacity-75"></i>
+                    <i class="fas fa-cogs fa-2x opacity-75"></i>
+                </div>
+                <div class="mt-2">
+                    <a href="{{ url_for('send_message') }}" class="btn btn-light btn-sm">Send Now</a>
                 </div>
             </div>
         </div>
@@ -118,7 +128,11 @@
     </div>
 </div>
 
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+let userGrowthChart = null;
+let messageStatsChart = null;
+
 // Load charts data and initialize
 async function loadDashboardData() {
     try {
@@ -128,27 +142,37 @@ async function loadDashboardData() {
 
         // User Growth Chart
         const growthCtx = document.getElementById('userGrowthChart').getContext('2d');
-        new Chart(growthCtx, {
-            type: 'line',
-            data: {
-                labels: growthData.labels,
-                datasets: [{
-                    label: 'New Users',
-                    data: growthData.data,
-                    borderColor: 'rgb(75, 192, 192)',
-                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        beginAtZero: true
+        
+        if (userGrowthChart) {
+            userGrowthChart.data.labels = growthData.labels;
+            userGrowthChart.data.datasets[0].data = growthData.data;
+            userGrowthChart.update();
+        } else {
+            userGrowthChart = new Chart(growthCtx, {
+                type: 'line',
+                data: {
+                    labels: growthData.labels,
+                    datasets: [{
+                        label: 'Cumulative Users',
+                        data: growthData.data,
+                        borderColor: 'rgb(75, 192, 192)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                        borderWidth: 2,
+                        fill: true,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
 
         // Load message stats
         const statsResponse = await fetch('/api/analytics/message_stats');
@@ -156,60 +180,149 @@ async function loadDashboardData() {
 
         // Update counters
         document.getElementById('messageCount').textContent = statsData.total_messages;
+        document.getElementById('successCount').textContent = statsData.successful_sends;
+        document.getElementById('failCount').textContent = statsData.failed_sends;
+        document.getElementById('activeTasks').textContent = statsData.active_tasks || 0;
+        document.getElementById('pendingTasks').textContent = statsData.pending_tasks || 0;
 
         // Message Stats Chart
         const statsCtx = document.getElementById('messageStatsChart').getContext('2d');
-        new Chart(statsCtx, {
-            type: 'doughnut',
-            data: {
-                labels: ['Successful', 'Failed'],
-                datasets: [{
-                    data: [statsData.successful_sends, statsData.failed_sends],
-                    backgroundColor: [
-                        'rgb(40, 167, 69)',
-                        'rgb(220, 53, 69)'
-                    ]
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom',
+        
+        if (messageStatsChart) {
+            messageStatsChart.data.datasets[0].data = [statsData.successful_sends, statsData.failed_sends];
+            messageStatsChart.update();
+        } else {
+            messageStatsChart = new Chart(statsCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Successful', 'Failed'],
+                    datasets: [{
+                        data: [statsData.successful_sends, statsData.failed_sends],
+                        backgroundColor: [
+                            'rgb(40, 167, 69)',
+                            'rgb(220, 53, 69)'
+                        ],
+                        borderColor: [
+                            'rgba(40, 167, 69, 0.8)',
+                            'rgba(220, 53, 69, 0.8)'
+                        ],
+                        borderWidth: 2
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        }
                     }
                 }
-            }
-        });
+            });
+        }
 
-        // Mock recent activity
-        const activityHtml = `
-            <div class="list-group-item">
-                <i class="fas fa-user-plus text-success me-2"></i>
-                <small class="text-muted">2 mins ago</small>
-                <div>New user registered</div>
-            </div>
-            <div class="list-group-item">
-                <i class="fas fa-paper-plane text-primary me-2"></i>
-                <small class="text-muted">5 mins ago</small>
-                <div>Bulk message sent to 50 users</div>
-            </div>
-            <div class="list-group-item">
-                <i class="fas fa-exclamation-triangle text-warning me-2"></i>
-                <small class="text-muted">10 mins ago</small>
-                <div>3 message delivery failures</div>
-            </div>
-        `;
-        document.getElementById('recentActivity').innerHTML = activityHtml;
+        // Load recent activity
+        loadRecentActivity();
 
     } catch (error) {
         console.error('Error loading dashboard data:', error);
     }
 }
 
-// Load data when page loads
-document.addEventListener('DOMContentLoaded', loadDashboardData);
+// Load real recent activity from task queue
+async function loadRecentActivity() {
+    try {
+        // Get recent tasks from task queue
+        const response = await fetch('/api/task-status');
+        
+        if (!response.ok) {
+            // Fallback to static activity
+            showStaticActivity();
+            return;
+        }
+        
+        const tasks = await response.json();
+        
+        if (!Array.isArray(tasks) || tasks.length === 0) {
+            showStaticActivity();
+            return;
+        }
+        
+        // Sort by creation time (newest first)
+        const recentTasks = tasks.slice(0, 5);
+        
+        let activityHtml = '';
+        
+        for (const task of recentTasks) {
+            let icon = 'fas fa-paper-plane text-primary';
+            let status = task.status;
+            
+            if (task.status === 'completed') {
+                icon = 'fas fa-check text-success';
+            } else if (task.status === 'failed') {
+                icon = 'fas fa-exclamation-triangle text-danger';
+            } else if (task.status === 'running') {
+                icon = 'fas fa-spinner fa-spin text-warning';
+            }
+            
+            const createdAt = new Date(task.created_at);
+            const timeAgo = getTimeAgo(createdAt);
+            
+            activityHtml += `
+                <div class="list-group-item">
+                    <i class="${icon} me-2"></i>
+                    <small class="text-muted">${timeAgo}</small>
+                    <div>Task ${task.task_id.substring(0, 8)}... - ${status.toUpperCase()}</div>
+                    ${task.message ? `<small class="text-muted">${task.message}</small>` : ''}
+                </div>
+            `;
+        }
+        
+        document.getElementById('recentActivity').innerHTML = activityHtml || '<div class="list-group-item"><i class="fas fa-inbox me-2"></i>No recent activity</div>';
+        
+    } catch (error) {
+        console.error('Error loading activity:', error);
+        showStaticActivity();
+    }
+}
 
-// Auto-refresh every 30 seconds
-setInterval(loadDashboardData, 30000);
+function showStaticActivity() {
+    const activityHtml = `
+        <div class="list-group-item">
+            <i class="fas fa-user-plus text-success me-2"></i>
+            <small class="text-muted">System initialized</small>
+            <div>Dashboard ready to monitor messages</div>
+        </div>
+    `;
+    document.getElementById('recentActivity').innerHTML = activityHtml;
+}
+
+function getTimeAgo(date) {
+    const seconds = Math.floor((new Date() - date) / 1000);
+    
+    let interval = seconds / 31536000;
+    if (interval > 1) return Math.floor(interval) + ' years ago';
+    
+    interval = seconds / 2592000;
+    if (interval > 1) return Math.floor(interval) + ' months ago';
+    
+    interval = seconds / 86400;
+    if (interval > 1) return Math.floor(interval) + ' days ago';
+    
+    interval = seconds / 3600;
+    if (interval > 1) return Math.floor(interval) + ' hours ago';
+    
+    interval = seconds / 60;
+    if (interval > 1) return Math.floor(interval) + ' minutes ago';
+    
+    return Math.floor(seconds) + ' seconds ago';
+}
+
+// Load data when page loads
+document.addEventListener('DOMContentLoaded', () => {
+    loadDashboardData();
+});
+
+// Auto-refresh every 10 seconds
+setInterval(loadDashboardData, 10000);
 </script>
 {% endblock %}

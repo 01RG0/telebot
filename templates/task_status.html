@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+
+{% block title %}Task Status{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row">
+        <div class="col-md-8 offset-md-2">
+            <h2>📊 Task Progress</h2>
+            <div class="card">
+                <div class="card-body">
+                    <p><strong>Task ID:</strong> <code>{{ task.task_id }}</code></p>
+                    <p><strong>Status:</strong> 
+                        {% if task.status == 'completed' %}
+                            <span class="badge bg-success">Completed ✓</span>
+                        {% elif task.status == 'running' %}
+                            <span class="badge bg-primary">Running...</span>
+                        {% elif task.status == 'failed' %}
+                            <span class="badge bg-danger">Failed ✗</span>
+                        {% else %}
+                            <span class="badge bg-warning">{{ task.status }}</span>
+                        {% endif %}
+                    </p>
+                    
+                    <div class="progress mb-3">
+                        <div class="progress-bar {% if task.status == 'completed' %}bg-success{% elif task.status == 'failed' %}bg-danger{% else %}bg-primary{% endif %}" 
+                             role="progressbar" 
+                             style="width: {{ task.progress }}%"
+                             aria-valuenow="{{ task.progress }}" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            {{ task.progress }}%
+                        </div>
+                    </div>
+                    
+                    {% if task.message %}
+                    <p><strong>Message:</strong> {{ task.message }}</p>
+                    {% endif %}
+                    
+                    {% if task.data %}
+                    <div class="alert alert-info">
+                        <h5>Results:</h5>
+                        {% if task.data.sent is defined %}
+                        <p>✅ <strong>Successfully Sent:</strong> {{ task.data.sent }} messages</p>
+                        {% endif %}
+                        {% if task.data.failed is defined %}
+                        <p>❌ <strong>Failed:</strong> {{ task.data.failed }} messages</p>
+                        {% endif %}
+                        {% if task.data.failed_details %}
+                        <h6>First Failed Attempts:</h6>
+                        <ul>
+                            {% for failed_item in task.data.failed_details %}
+                            <li>{{ failed_item[0] }}: {{ failed_item[1] }}</li>
+                            {% endfor %}
+                        </ul>
+                        {% endif %}
+                    </div>
+                    {% endif %}
+                    
+                    {% if task.error %}
+                    <div class="alert alert-danger">
+                        <strong>Error:</strong> {{ task.error }}
+                    </div>
+                    {% endif %}
+                    
+                    <p style="font-size: 0.9em; color: #666;">
+                        <strong>Created:</strong> {{ task.created_at.strftime('%Y-%m-%d %H:%M:%S') if task.created_at else 'N/A' }}<br>
+                        {% if task.started_at %}<strong>Started:</strong> {{ task.started_at.strftime('%Y-%m-%d %H:%M:%S') }}<br>{% endif %}
+                        {% if task.completed_at %}<strong>Completed:</strong> {{ task.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}{% endif %}
+                    </p>
+                </div>
+            </div>
+            
+            {% if task.status != 'completed' and task.status != 'failed' %}
+            <script>
+                // Auto-refresh every 2 seconds while task is running
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            </script>
+            {% endif %}
+            
+            <div class="mt-3">
+                {% if task.status == 'completed' or task.status == 'failed' %}
+                <a href="{{ url_for('send_message') }}" class="btn btn-primary">Send Another Message</a>
+                {% endif %}
+                <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">Back to Dashboard</a>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

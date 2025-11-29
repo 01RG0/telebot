@@ -26,3 +26,21 @@ LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 # GUI Configuration
 WINDOW_TITLE = "Telegram Admin - Mr Shady"
 WINDOW_SIZE = "980x660"
+
+# === OPTIMIZATION SETTINGS ===
+# Task Queue Configuration
+TASK_QUEUE_WORKERS = int(os.getenv("TASK_QUEUE_WORKERS", "2"))  # Number of worker threads for background tasks
+TASK_QUEUE_ENABLED = os.getenv("TASK_QUEUE_ENABLED", "True").lower() in ("true", "1", "yes")
+
+# Excel Processing
+EXCEL_CHUNK_SIZE = int(os.getenv("EXCEL_CHUNK_SIZE", "100"))  # Process rows in chunks of N size
+EXCEL_BATCH_SIZE = int(os.getenv("EXCEL_BATCH_SIZE", "50"))  # Send messages in batches
+
+# Rate Limiting
+MIN_SEND_DELAY = float(os.getenv("MIN_SEND_DELAY", "0.1"))  # Minimum delay between messages (seconds)
+MAX_SEND_DELAY = float(os.getenv("MAX_SEND_DELAY", "2.0"))  # Maximum delay between messages
+BATCH_SEND_ENABLED = os.getenv("BATCH_SEND_ENABLED", "False").lower() in ("true", "1", "yes")  # Enable batch sending
+
+# Performance
+TIMEOUT_SECONDS = int(os.getenv("TIMEOUT_SECONDS", "300"))  # Task timeout in seconds
+REQUEST_TIMEOUT = int(os.getenv("REQUEST_TIMEOUT", "30"))  # Flask request timeout

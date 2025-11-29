@@ -12,11 +12,17 @@ from io import BytesIO, StringIO
 from datetime import datetime
 import config
 import tempfile
+import uuid
 
 # Import bot components
 from config import TELEGRAM_TOKEN, LOG_FILE
 from database import db
 from bot_handler import bot, run_bot_forever, send_bulk_by_chatids, send_template_to_selected, send_personalized_from_rows, send_personalized_from_template, request_phone_number
+
+# Import optimization modules
+from task_queue import get_task_queue
+from excel_processor import ExcelProcessor
+from message_sender import send_personalized_from_template_optimized, send_bulk_optimized
 
 # Configure Logging
 logging.basicConfig(filename=LOG_FILE, level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -136,22 +142,48 @@ def user_detail(chat_id):
 @app.route('/api/analytics/user_growth')
 @login_required
 def api_user_growth():
-    """API endpoint for user growth data"""
+    """API endpoint for user growth data from actual database"""
     from datetime import datetime, timedelta
     import json
 
-    # Get user growth data for last 30 days
-    end_date = datetime.utcnow()
-    start_date = end_date - timedelta(days=30)
-
-    # This is a simplified version - in production you'd aggregate from database
-    # For now, return mock data
-    data = {
-        'labels': [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(31)],
-        'data': [i * 2 for i in range(31)]  # Mock growth data
-    }
-
-    return json.dumps(data)
+    try:
+        # Get user growth data for last 30 days from database
+        end_date = datetime.utcnow()
+        start_date = end_date - timedelta(days=30)
+        
+        users = db.get_users_simple()
+        
+        # Count users by join date
+        daily_counts = {}
+        cumulative = 0
+        
+        for user in users:
+            joined_at = user[2]  # joined_at field
+            if joined_at:
+                date_key = joined_at.strftime('%Y-%m-%d')
+                daily_counts[date_key] = daily_counts.get(date_key, 0) + 1
+        
+        # Generate 30-day labels and data
+        labels = []
+        data = []
+        
+        for i in range(31):
+            current_date = start_date + timedelta(days=i)
+            date_str = current_date.strftime('%Y-%m-%d')
+            labels.append(date_str)
+            
+            # Count cumulative users up to this date
+            cumulative += daily_counts.get(date_str, 0)
+            data.append(cumulative)
+        
+        result = {
+            'labels': labels,
+            'data': data
+        }
+        return jsonify(result)
+    except Exception as e:
+        logger.error(f"Error fetching user growth data: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/settings')
 @login_required
@@ -235,18 +267,49 @@ def export_analytics():
 @app.route('/api/analytics/message_stats')
 @login_required
 def api_message_stats():
-    """API endpoint for message statistics"""
-    import json
-
-    # Mock message statistics
-    data = {
-        'total_messages': 1250,
-        'successful_sends': 1180,
-        'failed_sends': 70,
-        'average_response_time': 2.3
-    }
-
-    return json.dumps(data)
+    """API endpoint for real message statistics from task queue"""
+    try:
+        task_queue = get_task_queue()
+        
+        # Count task statistics
+        total_tasks = len(task_queue.results)
+        completed_tasks = sum(1 for t in task_queue.results.values() if t.status == 'completed')
+        failed_tasks = sum(1 for t in task_queue.results.values() if t.status == 'failed')
+        
+        # Calculate sent/failed from completed tasks
+        total_sent = 0
+        total_failed = 0
+        
+        for task in task_queue.results.values():
+            if task.status == 'completed' and isinstance(task.data, dict):
+                total_sent += task.data.get('sent', 0)
+                total_failed += task.data.get('failed', 0)
+        
+        # Get user count
+        users = db.get_users_simple()
+        user_count = len(users)
+        
+        data = {
+            'total_messages': total_sent + total_failed,
+            'successful_sends': total_sent,
+            'failed_sends': total_failed,
+            'total_users': user_count,
+            'active_tasks': sum(1 for t in task_queue.results.values() if t.status == 'running'),
+            'pending_tasks': sum(1 for t in task_queue.results.values() if t.status == 'pending'),
+        }
+        
+        return jsonify(data)
+    except Exception as e:
+        logger.error(f"Error fetching message stats: {e}")
+        return jsonify({
+            'total_messages': 0,
+            'successful_sends': 0,
+            'failed_sends': 0,
+            'total_users': 0,
+            'active_tasks': 0,
+            'pending_tasks': 0,
+            'error': str(e)
+        }), 500
 
 @app.route('/export')
 @login_required
@@ -340,16 +403,24 @@ def send_message():
         
         if action == 'template':
             template = request.form.get('template')
-            # In a real app, we'd select users from a list, but for simplicity let's send to ALL for now or handle selection differently
-            # For this version, let's assume "Send to All" or allow pasting IDs.
-            # To keep it simple and powerful: "Send to All" button
-            
             target_type = request.form.get('target_type')
+            
             if target_type == 'all':
+                # Submit background task for bulk sending
                 users = db.get_users_simple()
                 chat_ids = [u[0] for u in users]
-                sent, failed = send_template_to_selected(chat_ids, template)
-                flash(f"Sent: {len(sent)}, Failed: {len(failed)}", 'info')
+                
+                task_id = str(uuid.uuid4())
+                task_queue = get_task_queue()
+                task_queue.submit_task(
+                    task_id,
+                    send_bulk_optimized,
+                    args=(chat_ids, template),
+                    kwargs={'delay': config.SEND_DELAY}
+                )
+                
+                flash(f"Message send started in background (Task ID: {task_id[:8]}). Check status in dashboard.", 'info')
+                return redirect(url_for('task_status', task_id=task_id))
             
         elif action == 'excel':
             file_path = request.form.get('file_path')
@@ -362,41 +433,56 @@ def send_message():
                 return render_template('send.html')
             
             try:
-                # Read the Excel file
-                df = pd.read_excel(file_path)
+                # Validate Excel file first (lightweight operation)
+                preview_result = ExcelProcessor.get_excel_preview(file_path)
+                if 'error' in preview_result:
+                    flash(f"Error: {preview_result['error']}", 'danger')
+                    return render_template('send.html')
                 
                 # Validate columns exist
-                if target_column not in df.columns:
+                columns = preview_result['columns']
+                if target_column not in columns:
                     flash(f"Target column '{target_column}' not found in file", 'danger')
                     return render_template('send.html')
                 
                 for col in custom_columns:
-                    if col not in df.columns:
+                    if col not in columns:
                         flash(f"Column '{col}' not found in file", 'danger')
                         return render_template('send.html')
                 
-                # Prepare rows with renamed target column
-                rows = []
-                for idx, row in df.iterrows():
-                    row_dict = row.to_dict()
-                    # Create new dict with 'target' key pointing to target_column value
-                    prepared_row = {
-                        'target': row_dict.get(target_column),
-                    }
-                    # Add selected custom columns
-                    for col in custom_columns:
-                        prepared_row[col] = row_dict.get(col)
-                    rows.append(prepared_row)
+                # Submit background task for Excel processing and sending
+                task_id = str(uuid.uuid4())
+                task_queue = get_task_queue()
                 
-                # Send personalized messages
-                sent, failed = send_personalized_from_template(template, rows)
-                flash(f"Personalized Send - Sent: {len(sent)}, Failed: {len(failed)}", 'success')
+                def process_and_send_excel():
+                    """Background task for Excel processing and sending"""
+                    try:
+                        # Read and prepare rows
+                        df = ExcelProcessor.read_excel_chunked(file_path)
+                        rows = ExcelProcessor.prepare_personalized_rows(
+                            df, target_column, custom_columns
+                        )
+                        
+                        # Send with progress tracking
+                        sent, failed = send_personalized_from_template_optimized(
+                            template, rows, delay=config.SEND_DELAY
+                        )
+                        
+                        return {
+                            'sent': len(sent),
+                            'failed': len(failed),
+                            'failed_details': failed[:10]  # Keep first 10 failures for inspection
+                        }
+                    finally:
+                        # Clean up temp file
+                        try:
+                            os.remove(file_path)
+                        except:
+                            pass
                 
-                # Clean up temp file
-                try:
-                    os.remove(file_path)
-                except:
-                    pass
+                task_queue.submit_task(task_id, process_and_send_excel)
+                flash(f"Excel processing started in background (Task ID: {task_id[:8]}). Processing {preview_result.get('row_count', 'N/A')} rows.", 'info')
+                return redirect(url_for('task_status', task_id=task_id))
                     
             except Exception as e:
                 logger.error(f"Error processing Excel file: {e}")
@@ -422,33 +508,52 @@ def preview_excel():
         os.close(temp_fd)
         file.save(temp_path)
         
-        # Read Excel file
-        df = pd.read_excel(temp_path)
+        # Use optimized Excel processor
+        result = ExcelProcessor.get_excel_preview(temp_path)
         
-        if df.empty:
+        if 'error' in result:
             os.remove(temp_path)
-            return jsonify({'error': 'Excel file is empty'}), 400
+            return jsonify({'error': result['error']}), 400
         
-        columns = list(df.columns)
-        sample_data = df.iloc[0].to_dict()
-        
-        # Convert sample data to serializable format
-        sample_data_serialized = {}
-        for key, value in sample_data.items():
-            if pd.isna(value):
-                sample_data_serialized[key] = '[empty]'
-            else:
-                sample_data_serialized[key] = str(value)
-        
-        return jsonify({
-            'columns': columns,
-            'sample_data': sample_data_serialized,
-            'file_path': temp_path
-        })
+        result['file_path'] = temp_path
+        return jsonify(result)
     
     except Exception as e:
         logger.error(f"Error previewing Excel file: {e}")
         return jsonify({'error': f'Error reading file: {str(e)}'}), 400
+
+@app.route('/task-status/<task_id>')
+@login_required
+def task_status(task_id):
+    """Display status of a background task"""
+    task_queue = get_task_queue()
+    result = task_queue.get_status(task_id)
+    
+    return render_template('task_status.html', task=result)
+
+@app.route('/api/task-status/<task_id>')
+@login_required
+def api_task_status(task_id):
+    """API endpoint for task status"""
+    task_queue = get_task_queue()
+    result = task_queue.get_status(task_id)
+    
+    return jsonify(result.to_dict())
+
+@app.route('/api/task-status')
+@login_required
+def api_recent_tasks():
+    """API endpoint for recent tasks list"""
+    task_queue = get_task_queue()
+    
+    # Get all tasks and sort by creation time (newest first)
+    all_tasks = list(task_queue.results.values())
+    all_tasks.sort(key=lambda t: t.created_at, reverse=True)
+    
+    # Return last 10 tasks
+    recent_tasks = [task.to_dict() for task in all_tasks[:10]]
+    
+    return jsonify(recent_tasks)
 
 @app.route('/logs')
 @login_required
