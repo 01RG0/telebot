@@ -85,6 +85,55 @@
     </div>
 </div>
 
+<!-- Safety & Loop Detection Status -->
+<div class="row mb-4">
+    <div class="col-md-12">
+        <div class="card shadow" id="safetyCard">
+            <div class="card-header bg-light">
+                <h5 class="mb-0">
+                    <i class="fas fa-shield-alt"></i> Safety & Loop Detection
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <p><strong>Queue Status:</strong></p>
+                        <p>
+                            <span id="queueStatus" class="badge badge-success">RUNNING</span>
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Loop Detection:</strong></p>
+                        <p>
+                            <span id="loopStatus" class="badge badge-info">Monitoring</span>
+                        </p>
+                    </div>
+                    <div class="col-md-4">
+                        <p><strong>Recent Submissions:</strong></p>
+                        <p>
+                            <span id="recentSubmissions">0</span> / 5 (last 10s)
+                        </p>
+                    </div>
+                </div>
+                <hr>
+                <div class="row">
+                    <div class="col-md-12">
+                        <button class="btn btn-warning btn-sm" id="pauseBtn" onclick="pauseQueue()">
+                            <i class="fas fa-pause"></i> Pause Queue
+                        </button>
+                        <button class="btn btn-success btn-sm" id="resumeBtn" onclick="resumeQueue()" style="display:none;">
+                            <i class="fas fa-play"></i> Resume Queue
+                        </button>
+                        <button class="btn btn-danger btn-sm" id="resetBtn" onclick="resetQueue()">
+                            <i class="fas fa-redo"></i> Reset & Clear
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Charts Row -->
 <div class="row mb-4">
     <div class="col-md-8">
@@ -317,12 +366,100 @@ function getTimeAgo(date) {
     return Math.floor(seconds) + ' seconds ago';
 }
 
+// ============================================================
+// QUEUE SAFETY MONITORING
+// ============================================================
+
+async function loadQueueHealth() {
+    try {
+        const response = await fetch('/api/queue/health');
+        if (!response.ok) return;
+        
+        const health = await response.json();
+        
+        // Update safety card
+        const queueStatus = document.getElementById('queueStatus');
+        const loopStatus = document.getElementById('loopStatus');
+        const recentSubmissions = document.getElementById('recentSubmissions');
+        
+        // Queue Status
+        if (health.paused) {
+            queueStatus.textContent = 'PAUSED';
+            queueStatus.className = 'badge badge-danger';
+            document.getElementById('pauseBtn').style.display = 'none';
+            document.getElementById('resumeBtn').style.display = 'inline-block';
+        } else {
+            queueStatus.textContent = 'RUNNING';
+            queueStatus.className = 'badge badge-success';
+            document.getElementById('pauseBtn').style.display = 'inline-block';
+            document.getElementById('resumeBtn').style.display = 'none';
+        }
+        
+        // Loop Detection Status
+        if (health.loop_detected) {
+            loopStatus.textContent = '⚠️ LOOP DETECTED';
+            loopStatus.className = 'badge badge-danger';
+        } else {
+            loopStatus.textContent = 'Monitoring';
+            loopStatus.className = 'badge badge-info';
+        }
+        
+        // Recent submissions
+        recentSubmissions.textContent = health.recent_submissions;
+        
+    } catch (e) {
+        console.error('Failed to load queue health:', e);
+    }
+}
+
+async function pauseQueue() {
+    try {
+        const response = await fetch('/api/queue/pause', { method: 'POST' });
+        if (response.ok) {
+            alert('✅ Task queue paused');
+            loadQueueHealth();
+        }
+    } catch (e) {
+        alert('Error pausing queue: ' + e);
+    }
+}
+
+async function resumeQueue() {
+    try {
+        const response = await fetch('/api/queue/resume', { method: 'POST' });
+        if (response.ok) {
+            alert('✅ Task queue resumed');
+            loadQueueHealth();
+        }
+    } catch (e) {
+        alert('Error resuming queue: ' + e);
+    }
+}
+
+async function resetQueue() {
+    if (!confirm('🔄 Clear loop detection and reset queue?\n\nThis will allow the bot to restart. Continue?')) {
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/queue/clear', { method: 'POST' });
+        if (response.ok) {
+            alert('✅ Queue cleared. Bot can now be restarted.');
+            loadQueueHealth();
+        }
+    } catch (e) {
+        alert('Error resetting queue: ' + e);
+    }
+}
+
 // Load data when page loads
 document.addEventListener('DOMContentLoaded', () => {
     loadDashboardData();
+    loadQueueHealth();
 });
 
 // Auto-refresh every 10 seconds
 setInterval(loadDashboardData, 10000);
+setInterval(loadQueueHealth, 5000);  // Check queue health more frequently
 </script>
 {% endblock %}

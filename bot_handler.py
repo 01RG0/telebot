@@ -181,6 +181,13 @@ def run_bot_forever():
         logger.warning(f"Webhook cleanup: {e}")
     
     while True:
+        # Check if bot should stop (loop detected)
+        import os
+        if os.environ.get('STOP_BOT') == '1':
+            logger.critical("🛑 STOPPING BOT - Loop detected in task queue")
+            logger.critical("⚠️  To restart: Clear the logs and restart the application")
+            break
+        
         try:
             logger.info(f"Starting bot polling... (retry: {retry_count})")
             # Reset retry count on successful connection

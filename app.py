@@ -594,5 +594,52 @@ def view_logs():
                          search_term=search_term,
                          date_filter=date_filter)
 
+# ============================================================================
+# QUEUE SAFETY & MONITORING ENDPOINTS
+# ============================================================================
+
+@app.route('/api/queue/health', methods=['GET'])
+@login_required
+def queue_health():
+    """Get task queue health status"""
+    queue = get_task_queue()
+    return jsonify(queue.get_health_status())
+
+@app.route('/api/queue/pause', methods=['POST'])
+@login_required
+def queue_pause():
+    """Pause task queue to prevent loop spam"""
+    queue = get_task_queue()
+    queue.pause("Manual pause from admin panel")
+    logger.warning("🛑 Queue paused manually from admin panel")
+    return jsonify({'status': 'paused', 'message': 'Task queue paused'}), 200
+
+@app.route('/api/queue/resume', methods=['POST'])
+@login_required
+def queue_resume():
+    """Resume task queue after loop resolution"""
+    queue = get_task_queue()
+    queue.resume()
+    logger.info("✅ Queue resumed manually from admin panel")
+    return jsonify({'status': 'resumed', 'message': 'Task queue resumed'}), 200
+
+@app.route('/api/queue/clear', methods=['POST'])
+@login_required
+def queue_clear():
+    """Clear loop detection and restart"""
+    queue = get_task_queue()
+    # Reset all loop detection markers
+    queue.paused = False
+    queue.loop_detected = False
+    queue.task_submission_times = []
+    queue.task_retry_count = {}
+    
+    # Clear STOP_BOT signal
+    import os
+    os.environ.pop('STOP_BOT', None)
+    
+    logger.info("🔄 Queue cleared and reset - ready to restart bot")
+    return jsonify({'status': 'cleared', 'message': 'Queue reset. Bot can be restarted.'}), 200
+
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=5000)
