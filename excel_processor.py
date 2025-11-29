@@ -77,9 +77,18 @@ class ExcelProcessor:
         for idx, row in df.iterrows():
             row_dict = row.to_dict()
             
+            # Get target value and convert to string to preserve formatting
+            target_value = row_dict.get(target_column)
+            
+            # Critical: Convert to string early to prevent scientific notation loss
+            if target_value is not None:
+                target_str = str(target_value).strip()
+            else:
+                target_str = ""
+            
             # Create new dict with 'target' key pointing to target_column value
             prepared_row = {
-                'target': row_dict.get(target_column),
+                'target': target_str,
             }
             
             # Add selected custom columns
