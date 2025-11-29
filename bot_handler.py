@@ -173,6 +173,13 @@ def run_bot_forever():
     max_retries = 10
     base_backoff = 5
     
+    # Delete any existing webhook first (polling and webhook can't coexist)
+    try:
+        bot.delete_webhook()
+        logger.info("✅ Webhook deleted - polling mode ready")
+    except Exception as e:
+        logger.warning(f"Webhook cleanup: {e}")
+    
     while True:
         try:
             logger.info(f"Starting bot polling... (retry: {retry_count})")
