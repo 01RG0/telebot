@@ -251,6 +251,40 @@ class Database:
         except Exception as e:
             logger.error(f"Failed to find users by name '{name}': {e}")
             return []
+
+    def find_users_by_phone(self, phone: str):
+        """
+        Find users by phone number
+        
+        Args:
+            phone: Phone number to search for (exact or partial match)
+            
+        Returns:
+            List of tuples (chat_id, name)
+        """
+        try:
+            # Clean phone number - remove spaces, dashes, etc
+            cleaned_phone = str(phone).strip()
+            
+            # Try exact match first
+            user = self.users_collection.find_one(
+                {"phone_number": cleaned_phone},
+                {"chat_id": 1, "name": 1, "_id": 0}
+            )
+            
+            if user:
+                return [(user["chat_id"], user.get("name", ""))]
+            
+            # If no exact match, try partial match
+            pattern = {"$regex": cleaned_phone, "$options": "i"}
+            users = self.users_collection.find(
+                {"phone_number": pattern},
+                {"chat_id": 1, "name": 1, "_id": 0}
+            )
+            return [(user["chat_id"], user.get("name", "")) for user in users]
+        except Exception as e:
+            logger.error(f"Failed to find users by phone '{phone}': {e}")
+            return []
     
     def delete_user(self, chat_id: int):
         """

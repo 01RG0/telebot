@@ -52,21 +52,41 @@ def send_personalized_from_template_optimized(
                 progress_callback(idx + 1, total_rows)
             continue
 
-        # If target is numeric → treat as chat_id
-        if isinstance(target, (int,)) or (isinstance(target, str) and target.isdigit()):
-            cid = int(target)
+        # Convert target to string and clean it
+        target_str = str(target).strip()
+        
+        # Try to parse as chat_id (numeric value)
+        cid = None
+        try:
+            # Remove spaces, handle scientific notation, convert to int
+            if 'E' in target_str.upper():
+                # Handle scientific notation (2.01285E+11 → 201285000000)
+                cid = int(float(target_str))
+            else:
+                # Try direct int conversion
+                cid = int(target_str)
+        except (ValueError, TypeError):
+            # Not a valid number, will try as phone/name lookup
+            pass
+        
+        # If successfully parsed as chat_id, send directly
+        if cid is not None:
             try:
                 bot.send_message(cid, message)
                 sent.append(cid)
                 logger.info(f"Sent message to {cid}")
             except Exception as e:
-                failed.append((cid, str(e)))
+                failed.append((target_str, str(e)))
                 logger.warning(f"Failed to send to {cid}: {e}")
         else:
-            # Treat as name search
-            matches = db.find_users_by_name(str(target))
+            # Try phone number or name lookup
+            matches = db.find_users_by_phone(target_str)
             if not matches:
-                failed.append((target, "no matching user by name"))
+                # Try name search as fallback
+                matches = db.find_users_by_name(target_str)
+            
+            if not matches:
+                failed.append((target_str, "no matching user found"))
             else:
                 # Send to all matches
                 for cid, name in matches:
