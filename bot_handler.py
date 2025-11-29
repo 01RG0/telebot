@@ -17,7 +17,13 @@ logger = logging.getLogger("telegram_app.bot")
 bot = telebot.TeleBot(TELEGRAM_TOKEN, parse_mode="HTML")
 
 # Configure session with retry strategy for better connection handling
-session = bot.session
+if not hasattr(bot, 'session') or bot.session is None:
+    import requests
+    session = requests.Session()
+    bot.session = session
+else:
+    session = bot.session
+
 adapter = HTTPAdapter(
     max_retries=Retry(
         total=3,
