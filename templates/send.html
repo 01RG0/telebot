@@ -7,7 +7,69 @@
     </div>
 </div>
 
-<div class="row">
+<!-- Progress Section (Hidden initially) -->
+<div id="progressSection" class="row" style="display: none;">
+    <div class="col-md-12">
+        <div class="card shadow mb-4">
+            <div class="card-header bg-info text-white">
+                <h5>Sending Progress...</h5>
+            </div>
+            <div class="card-body">
+                <!-- Main Progress Bar -->
+                <div class="mb-4">
+                    <h6>Overall Progress: <span id="progressPercent">0</span>%</h6>
+                    <div class="progress" style="height: 30px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated" 
+                             id="mainProgressBar"
+                             role="progressbar" 
+                             style="width: 0%; font-weight: bold;"
+                             aria-valuenow="0" 
+                             aria-valuemin="0" 
+                             aria-valuemax="100">
+                            0%
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Message Statistics -->
+                <div class="row">
+                    <div class="col-md-4">
+                        <div class="card text-white bg-success">
+                            <div class="card-body">
+                                <h6 class="card-title">Successfully Sent</h6>
+                                <h3 id="sentCount">0</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-white bg-warning">
+                            <div class="card-body">
+                                <h6 class="card-title">Still Processing</h6>
+                                <h3 id="remainingCount">0</h3>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-4">
+                        <div class="card text-white bg-danger">
+                            <div class="card-body">
+                                <h6 class="card-title">Failed</h6>
+                                <h3 id="failedCount">0</h3>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Status Message -->
+                <div class="alert alert-info mt-3" id="statusAlert" style="display: none;">
+                    <strong>Status:</strong> <span id="statusMessage"></span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Send Forms Section -->
+<div id="formsSection" class="row">
     <!-- Template Message -->
     <div class="col-md-6">
         <div class="card shadow mb-4">
@@ -273,6 +335,89 @@ function updatePreview(sampleData, selectedColumns, template) {
     } catch (error) {
         preview.innerHTML = `<span class="text-danger">Error in template: ${error.message}</span>`;
     }
+}
+
+// Handle form submission for progress tracking
+document.getElementById('sendForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    
+    // Hide forms and show progress
+    document.getElementById('formsSection').style.display = 'none';
+    document.getElementById('progressSection').style.display = 'block';
+    
+    // Get the task ID from the response by submitting the form
+    const formData = new FormData(this);
+    
+    fetch('{{ url_for("send_message") }}', {
+        method: 'POST',
+        body: formData
+    }).then(response => {
+        if (response.redirected) {
+            // Extract task ID from redirect URL
+            const taskIdMatch = response.url.match(/task-status\/([a-f0-9-]+)/);
+            if (taskIdMatch) {
+                startProgressTracking(taskIdMatch[1]);
+            }
+        }
+    }).catch(error => {
+        console.error('Error submitting form:', error);
+        document.getElementById('formsSection').style.display = 'block';
+        document.getElementById('progressSection').style.display = 'none';
+    });
+});
+
+function startProgressTracking(taskId) {
+    let refreshCount = 0;
+    const maxRefreshes = 150; // Max 5 minutes
+    
+    function updateProgress() {
+        fetch(`/api/task-status/${taskId}`)
+            .then(response => response.json())
+            .then(data => {
+                // Update progress bar
+                document.getElementById('mainProgressBar').style.width = data.progress + '%';
+                document.getElementById('progressPercent').textContent = data.progress;
+                document.getElementById('mainProgressBar').textContent = data.progress + '%';
+                
+                // Update stats
+                if (data.data && typeof data.data === 'object') {
+                    document.getElementById('sentCount').textContent = data.data.sent || 0;
+                    document.getElementById('failedCount').textContent = data.data.failed || 0;
+                    
+                    if (data.data.total) {
+                        const processed = (data.data.sent || 0) + (data.data.failed || 0);
+                        const remaining = Math.max(0, data.data.total - processed);
+                        document.getElementById('remainingCount').textContent = remaining;
+                    }
+                }
+                
+                // Update status message
+                if (data.message) {
+                    document.getElementById('statusAlert').style.display = 'block';
+                    document.getElementById('statusMessage').textContent = data.message;
+                }
+                
+                // Continue updating if still running
+                if (data.status !== 'completed' && data.status !== 'failed' && refreshCount < maxRefreshes) {
+                    refreshCount++;
+                    setTimeout(updateProgress, 2000);
+                } else if (data.status === 'completed' || data.status === 'failed') {
+                    // Redirect to full task page
+                    setTimeout(() => {
+                        window.location.href = `/task-status/${taskId}`;
+                    }, 1500);
+                }
+            })
+            .catch(error => {
+                console.error('Error updating progress:', error);
+                if (refreshCount < maxRefreshes) {
+                    refreshCount++;
+                    setTimeout(updateProgress, 2000);
+                }
+            });
+    }
+    
+    updateProgress();
 }
 </script>
 {% endblock %}

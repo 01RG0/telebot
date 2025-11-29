@@ -5,82 +5,178 @@
 {% block content %}
 <div class="container mt-5">
     <div class="row">
-        <div class="col-md-8 offset-md-2">
-            <h2>📊 Task Progress</h2>
-            <div class="card">
+        <div class="col-md-10 offset-md-1">
+            <h2>Message Sending Progress</h2>
+            <div class="card shadow">
                 <div class="card-body">
                     <p><strong>Task ID:</strong> <code>{{ task.task_id }}</code></p>
                     <p><strong>Status:</strong> 
                         {% if task.status == 'completed' %}
-                            <span class="badge bg-success">Completed ✓</span>
+                            <span class="badge bg-success">Completed [OK]</span>
                         {% elif task.status == 'running' %}
                             <span class="badge bg-primary">Running...</span>
                         {% elif task.status == 'failed' %}
-                            <span class="badge bg-danger">Failed ✗</span>
+                            <span class="badge bg-danger">Failed [ERROR]</span>
                         {% else %}
                             <span class="badge bg-warning">{{ task.status }}</span>
                         {% endif %}
                     </p>
                     
-                    <div class="progress mb-3">
-                        <div class="progress-bar {% if task.status == 'completed' %}bg-success{% elif task.status == 'failed' %}bg-danger{% else %}bg-primary{% endif %}" 
-                             role="progressbar" 
-                             style="width: {{ task.progress }}%"
-                             aria-valuenow="{{ task.progress }}" 
-                             aria-valuemin="0" 
-                             aria-valuemax="100">
-                            {{ task.progress }}%
+                    <!-- Main Progress Bar -->
+                    <div class="mb-4">
+                        <h5>Overall Progress: <span id="progressPercent">{{ task.progress }}</span>%</h5>
+                        <div class="progress" style="height: 25px;">
+                            <div class="progress-bar {% if task.status == 'completed' %}bg-success{% elif task.status == 'failed' %}bg-danger{% else %}bg-primary{% endif %}" 
+                                 id="mainProgressBar"
+                                 role="progressbar" 
+                                 style="width: {{ task.progress }}%; font-weight: bold;"
+                                 aria-valuenow="{{ task.progress }}" 
+                                 aria-valuemin="0" 
+                                 aria-valuemax="100">
+                                {{ task.progress }}%
+                            </div>
                         </div>
                     </div>
                     
+                    <!-- Message Statistics -->
+                    <div class="row mb-4" id="statsContainer">
+                        <div class="col-md-4">
+                            <div class="card text-white bg-success">
+                                <div class="card-body">
+                                    <h6 class="card-title">Successfully Sent</h6>
+                                    <h3 id="sentCount">0</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-white bg-warning">
+                                <div class="card-body">
+                                    <h6 class="card-title">Still Processing</h6>
+                                    <h3 id="remainingCount">0</h3>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="card text-white bg-danger">
+                                <div class="card-body">
+                                    <h6 class="card-title">Failed</h6>
+                                    <h3 id="failedCount">0</h3>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Detailed Status Message -->
                     {% if task.message %}
-                    <p><strong>Message:</strong> {{ task.message }}</p>
+                    <div class="alert alert-info">
+                        <strong>Current Status:</strong> 
+                        <span id="statusMessage">{{ task.message }}</span>
+                    </div>
                     {% endif %}
                     
+                    <!-- Results Summary -->
                     {% if task.data %}
-                    <div class="alert alert-info">
-                        <h5>Results:</h5>
+                    <div class="alert alert-success">
+                        <h5>Final Results:</h5>
                         {% if task.data.sent is defined %}
-                        <p>✅ <strong>Successfully Sent:</strong> {{ task.data.sent }} messages</p>
+                        <p>[OK] <strong>Successfully Sent:</strong> <span class="badge bg-success">{{ task.data.sent }}</span> messages</p>
                         {% endif %}
                         {% if task.data.failed is defined %}
-                        <p>❌ <strong>Failed:</strong> {{ task.data.failed }} messages</p>
+                        <p>[ERROR] <strong>Failed:</strong> <span class="badge bg-danger">{{ task.data.failed }}</span> messages</p>
                         {% endif %}
+                        
+                        {% if task.data.total is defined %}
+                        <p><strong>Total Processed:</strong> {{ task.data.sent|default(0) + task.data.failed|default(0) }} / {{ task.data.total }}</p>
+                        {% endif %}
+                        
                         {% if task.data.failed_details %}
-                        <h6>First Failed Attempts:</h6>
-                        <ul>
+                        <h6 class="mt-3">First 10 Failed Messages:</h6>
+                        <div class="list-group">
                             {% for failed_item in task.data.failed_details %}
-                            <li>{{ failed_item[0] }}: {{ failed_item[1] }}</li>
+                            <div class="list-group-item list-group-item-danger">
+                                <strong>Target:</strong> {{ failed_item[0] }}<br>
+                                <small class="text-muted">Error: {{ failed_item[1] }}</small>
+                            </div>
                             {% endfor %}
-                        </ul>
+                        </div>
                         {% endif %}
                     </div>
                     {% endif %}
                     
                     {% if task.error %}
                     <div class="alert alert-danger">
-                        <strong>Error:</strong> {{ task.error }}
+                        <strong>[ERROR]</strong> {{ task.error }}
                     </div>
                     {% endif %}
                     
+                    <!-- Timing Information -->
                     <p style="font-size: 0.9em; color: #666;">
                         <strong>Created:</strong> {{ task.created_at.strftime('%Y-%m-%d %H:%M:%S') if task.created_at else 'N/A' }}<br>
                         {% if task.started_at %}<strong>Started:</strong> {{ task.started_at.strftime('%Y-%m-%d %H:%M:%S') }}<br>{% endif %}
-                        {% if task.completed_at %}<strong>Completed:</strong> {{ task.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}{% endif %}
+                        {% if task.completed_at %}<strong>Completed:</strong> {{ task.completed_at.strftime('%Y-%m-%d %H:%M:%S') }}<br>{% endif %}
+                        {% if task.started_at and task.completed_at %}
+                        <strong>Duration:</strong> {{ (task.completed_at - task.started_at).total_seconds()|round(1) }} seconds
+                        {% endif %}
                     </p>
                 </div>
             </div>
             
             {% if task.status != 'completed' and task.status != 'failed' %}
             <script>
-                // Auto-refresh every 2 seconds while task is running
-                setTimeout(() => {
-                    location.reload();
-                }, 2000);
+                let refreshCount = 0;
+                const maxRefreshes = 150; // Max 5 minutes with 2-second intervals
+                
+                function refreshProgress() {
+                    fetch('/api/task-status/{{ task.task_id }}')
+                        .then(response => response.json())
+                        .then(data => {
+                            // Update progress bar
+                            document.getElementById('mainProgressBar').style.width = data.progress + '%';
+                            document.getElementById('progressPercent').textContent = data.progress;
+                            
+                            // Update status message
+                            if (data.message) {
+                                document.getElementById('statusMessage').textContent = data.message;
+                            }
+                            
+                            // Update stats if data is available
+                            if (data.data && typeof data.data === 'object') {
+                                document.getElementById('sentCount').textContent = data.data.sent || 0;
+                                document.getElementById('failedCount').textContent = data.data.failed || 0;
+                                
+                                if (data.data.total) {
+                                    const processed = (data.data.sent || 0) + (data.data.failed || 0);
+                                    const remaining = Math.max(0, data.data.total - processed);
+                                    document.getElementById('remainingCount').textContent = remaining;
+                                }
+                            }
+                            
+                            // Continue refreshing if still running
+                            if (data.status !== 'completed' && data.status !== 'failed' && refreshCount < maxRefreshes) {
+                                refreshCount++;
+                                setTimeout(refreshProgress, 2000);
+                            } else if (data.status === 'completed' || data.status === 'failed') {
+                                // Task finished, reload page to show final results
+                                setTimeout(() => {
+                                    location.reload();
+                                }, 1000);
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error fetching progress:', error);
+                            if (refreshCount < maxRefreshes) {
+                                refreshCount++;
+                                setTimeout(refreshProgress, 2000);
+                            }
+                        });
+                }
+                
+                // Start refreshing when page loads
+                document.addEventListener('DOMContentLoaded', refreshProgress);
             </script>
             {% endif %}
             
-            <div class="mt-3">
+            <div class="mt-4">
                 {% if task.status == 'completed' or task.status == 'failed' %}
                 <a href="{{ url_for('send_message') }}" class="btn btn-primary">Send Another Message</a>
                 {% endif %}

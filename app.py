@@ -464,15 +464,11 @@ def send_message():
                         )
                         
                         # Send with progress tracking
-                        sent, failed = send_personalized_from_template_optimized(
+                        result = send_personalized_from_template_optimized(
                             template, rows, delay=config.SEND_DELAY
                         )
                         
-                        return {
-                            'sent': len(sent),
-                            'failed': len(failed),
-                            'failed_details': failed[:10]  # Keep first 10 failures for inspection
-                        }
+                        return result
                     finally:
                         # Clean up temp file
                         try:

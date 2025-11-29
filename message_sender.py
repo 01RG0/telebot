@@ -3,7 +3,7 @@ Optimized message sending functions with progress tracking and batching
 """
 import time
 import logging
-from typing import List, Dict, Tuple, Callable, Optional
+from typing import List, Dict, Callable, Optional
 from config import SEND_DELAY
 from database import db
 from bot_handler import bot
@@ -16,7 +16,7 @@ def send_personalized_from_template_optimized(
     rows: List[Dict],
     delay: float = SEND_DELAY,
     progress_callback: Optional[Callable] = None
-) -> Tuple[List, List]:
+) -> Dict:
     """
     Send personalized messages using a template and data from rows
     Optimized version with progress tracking
@@ -28,7 +28,7 @@ def send_personalized_from_template_optimized(
         progress_callback: Optional callback(current_index, total) for progress tracking
         
     Returns:
-        Tuple (sent: list, failed: list)
+        Dict with 'sent', 'failed', 'total', and 'failed_details'
     """
     sent = []
     failed = []
@@ -85,7 +85,12 @@ def send_personalized_from_template_optimized(
         if progress_callback:
             progress_callback(idx + 1, total_rows)
     
-    return sent, failed
+    return {
+        'sent': len(sent),
+        'failed': len(failed),
+        'total': total_rows,
+        'failed_details': failed[:10]  # Keep first 10 failures
+    }
 
 
 def send_bulk_optimized(
@@ -93,7 +98,7 @@ def send_bulk_optimized(
     message: str,
     delay: float = SEND_DELAY,
     progress_callback: Optional[Callable] = None
-) -> Tuple[List, List]:
+) -> Dict:
     """
     Send the same message to multiple chat IDs
     Optimized version with progress tracking
@@ -105,7 +110,7 @@ def send_bulk_optimized(
         progress_callback: Optional callback(current_index, total) for progress tracking
         
     Returns:
-        Tuple (sent: list, failed: list)
+        Dict with 'sent', 'failed', 'total', and 'failed_details'
     """
     sent = []
     failed = []
@@ -127,7 +132,12 @@ def send_bulk_optimized(
         if progress_callback:
             progress_callback(idx + 1, total_ids)
     
-    return sent, failed
+    return {
+        'sent': len(sent),
+        'failed': len(failed),
+        'total': total_ids,
+        'failed_details': failed[:10]
+    }
 
 
 def send_template_to_selected_optimized(
@@ -135,7 +145,7 @@ def send_template_to_selected_optimized(
     template: str,
     delay: float = SEND_DELAY,
     progress_callback: Optional[Callable] = None
-) -> Tuple[List, List]:
+) -> Dict:
     """
     Send templated message to specific chat IDs
     Optimized version with progress tracking
@@ -147,7 +157,7 @@ def send_template_to_selected_optimized(
         progress_callback: Optional callback(current_index, total) for progress tracking
         
     Returns:
-        Tuple (sent: list, failed: list)
+        Dict with 'sent', 'failed', 'total', and 'failed_details'
     """
     sent = []
     failed = []
@@ -169,4 +179,9 @@ def send_template_to_selected_optimized(
         if progress_callback:
             progress_callback(idx + 1, total_ids)
     
-    return sent, failed
+    return {
+        'sent': len(sent),
+        'failed': len(failed),
+        'total': total_ids,
+        'failed_details': failed[:10]
+    }
