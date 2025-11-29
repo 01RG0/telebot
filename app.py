@@ -151,15 +151,16 @@ def api_user_growth():
         end_date = datetime.utcnow()
         start_date = end_date - timedelta(days=30)
         
-        users = db.get_users_simple()
+        users, _, _ = db.get_users()
         
         # Count users by join date
         daily_counts = {}
         cumulative = 0
         
         for user in users:
-            joined_at = user[2]  # joined_at field
-            if joined_at:
+            # user structure: (chat_id, name, joined_at, phone, phone_verified_at)
+            joined_at = user[2] if len(user) > 2 else None
+            if joined_at and isinstance(joined_at, datetime):
                 date_key = joined_at.strftime('%Y-%m-%d')
                 daily_counts[date_key] = daily_counts.get(date_key, 0) + 1
         
