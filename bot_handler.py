@@ -6,6 +6,7 @@ from telebot import types
 import logging
 import time
 from functools import wraps
+import requests
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 from config import TELEGRAM_TOKEN, WELCOME_MESSAGE, SEND_DELAY
@@ -18,7 +19,6 @@ bot = telebot.TeleBot(TELEGRAM_TOKEN, parse_mode="HTML")
 
 # Configure session with retry strategy for better connection handling
 if not hasattr(bot, 'session') or bot.session is None:
-    import requests
     session = requests.Session()
     bot.session = session
 else:
@@ -198,7 +198,7 @@ def run_bot_forever():
                 skip_pending=True,
                 allowed_updates=None
             )
-        except ConnectionError as e:
+        except (ConnectionError, requests.exceptions.ConnectionError, requests.exceptions.ReadTimeout) as e:
             # Handle connection errors with exponential backoff
             retry_count = min(retry_count + 1, max_retries)
             backoff_time = base_backoff * (2 ** (retry_count - 1))
@@ -207,7 +207,9 @@ def run_bot_forever():
             time.sleep(backoff_time)
         except Exception as e:
             # Handle other exceptions
-            if "RemoteDisconnected" in str(type(e)):
+            # Check for RemoteDisconnected which might be wrapped in other exceptions
+            error_str = str(e)
+            if "RemoteDisconnected" in error_str or "Connection aborted" in error_str:
                 retry_count = min(retry_count + 1, max_retries)
                 backoff_time = base_backoff * (2 ** (retry_count - 1))
                 logger.error(f"Remote disconnected (attempt {retry_count}/{max_retries}): {e}")
