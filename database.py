@@ -371,6 +371,59 @@ class Database:
             logger.error(f"Failed to get phone number for user {chat_id}: {e}")
             return None
     
+    
+    def update_system_stats(self, sent=0, failed=0):
+        """
+        Update global system statistics
+        
+        Args:
+            sent: Number of successful messages to add
+            failed: Number of failed messages to add
+        """
+        try:
+            self.db.system_stats.update_one(
+                {"_id": "global_stats"},
+                {
+                    "$inc": {
+                        "total_sent": sent,
+                        "total_failed": failed,
+                        "total_messages": sent + failed
+                    },
+                    "$set": {"last_updated": datetime.utcnow()}
+                },
+                upsert=True
+            )
+        except Exception as e:
+            logger.error(f"Failed to update system stats: {e}")
+
+    def get_system_stats(self):
+        """
+        Get global system statistics
+        
+        Returns:
+            Dict with total_sent, total_failed, total_messages
+        """
+        try:
+            stats = self.db.system_stats.find_one({"_id": "global_stats"})
+            if not stats:
+                return {
+                    "total_sent": 0,
+                    "total_failed": 0,
+                    "total_messages": 0
+                }
+            return {
+                "total_sent": stats.get("total_sent", 0),
+                "total_failed": stats.get("total_failed", 0),
+                "total_messages": stats.get("total_messages", 0)
+            }
+        except Exception as e:
+            logger.error(f"Failed to get system stats: {e}")
+            return {
+                "total_sent": 0,
+                "total_failed": 0,
+                "total_messages": 0
+            }
+
     def close(self):
         """Close MongoDB connection"""
         if self.client:

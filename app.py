@@ -270,32 +270,21 @@ def export_analytics():
 @app.route('/api/analytics/message_stats')
 @login_required
 def api_message_stats():
-    """API endpoint for real message statistics from task queue"""
+    """API endpoint for real message statistics from task queue + persistent DB"""
     try:
         task_queue = get_task_queue()
         
-        # Count task statistics
-        total_tasks = len(task_queue.results)
-        completed_tasks = sum(1 for t in task_queue.results.values() if t.status == 'completed')
-        failed_tasks = sum(1 for t in task_queue.results.values() if t.status == 'failed')
-        
-        # Calculate sent/failed from completed tasks
-        total_sent = 0
-        total_failed = 0
-        
-        for task in task_queue.results.values():
-            if task.status == 'completed' and isinstance(task.data, dict):
-                total_sent += task.data.get('sent', 0)
-                total_failed += task.data.get('failed', 0)
+        # Get persistent stats from DB
+        db_stats = db.get_system_stats()
         
         # Get user count
         users = db.get_users_simple()
         user_count = len(users)
         
         data = {
-            'total_messages': total_sent + total_failed,
-            'successful_sends': total_sent,
-            'failed_sends': total_failed,
+            'total_messages': db_stats['total_messages'],
+            'successful_sends': db_stats['total_sent'],
+            'failed_sends': db_stats['total_failed'],
             'total_users': user_count,
             'active_tasks': sum(1 for t in task_queue.results.values() if t.status == 'running'),
             'pending_tasks': sum(1 for t in task_queue.results.values() if t.status == 'pending'),
@@ -422,12 +411,16 @@ def send_message():
                         pct = int((current / total) * 100)
                         update_task_progress(curr_task_id, pct, f"Sending {current}/{total}")
                         
-                    return send_bulk_optimized(
+                    result = send_bulk_optimized(
                         cids, 
                         msg, 
                         delay=config.SEND_DELAY,
                         progress_callback=progress
                     )
+                    
+                    # Persist stats to database
+                    db.update_system_stats(sent=result['sent'], failed=result['failed'])
+                    return result
 
                 task_queue.submit_task(task_id, run_bulk_send)
                 
@@ -489,6 +482,9 @@ def send_message():
                             delay=config.SEND_DELAY,
                             progress_callback=progress
                         )
+                        
+                        # Persist stats to database
+                        db.update_system_stats(sent=result['sent'], failed=result['failed'])
                         
                         return result
                     finally:
