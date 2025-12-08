@@ -26,11 +26,11 @@
     </div>
 
     <div class="col-md-3">
-        <div class="card text-white bg-success shadow">
+        <div class="card text-white bg-{{ 'success' if bot_status == 'Online' else 'danger' }} shadow">
             <div class="card-body">
                 <div class="d-flex justify-content-between">
                     <div>
-                        <h5 class="card-title">Online [OK]</h5>
+                        <h5 class="card-title">{{ bot_status }}</h5>
                         <p class="card-text mb-0">
                             <small>{{ bot_name }}</small><br>
                             <small>@{{ bot_username }}</small>
@@ -54,7 +54,7 @@
                 </div>
                 <div class="mt-2">
                     <small class="text-white">
-                        <span id="successCount">0</span> sent • 
+                        <span id="successCount">0</span> sent •
                         <span id="failCount">0</span> failed
                     </small>
                 </div>
@@ -121,7 +121,8 @@
                         <button class="btn btn-warning btn-sm" id="pauseBtn" onclick="pauseQueue()">
                             <i class="fas fa-pause"></i> Pause Queue
                         </button>
-                        <button class="btn btn-success btn-sm" id="resumeBtn" onclick="resumeQueue()" style="display:none;">
+                        <button class="btn btn-success btn-sm" id="resumeBtn" onclick="resumeQueue()"
+                            style="display:none;">
                             <i class="fas fa-play"></i> Resume Queue
                         </button>
                         <button class="btn btn-danger btn-sm" id="resetBtn" onclick="resetQueue()">
@@ -179,144 +180,144 @@
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
-let userGrowthChart = null;
-let messageStatsChart = null;
+    let userGrowthChart = null;
+    let messageStatsChart = null;
 
-// Load charts data and initialize
-async function loadDashboardData() {
-    try {
-        // Load user growth data
-        const growthResponse = await fetch('/api/analytics/user_growth');
-        const growthData = await growthResponse.json();
+    // Load charts data and initialize
+    async function loadDashboardData() {
+        try {
+            // Load user growth data
+            const growthResponse = await fetch('/api/analytics/user_growth');
+            const growthData = await growthResponse.json();
 
-        // User Growth Chart
-        const growthCtx = document.getElementById('userGrowthChart').getContext('2d');
-        
-        if (userGrowthChart) {
-            userGrowthChart.data.labels = growthData.labels;
-            userGrowthChart.data.datasets[0].data = growthData.data;
-            userGrowthChart.update();
-        } else {
-            userGrowthChart = new Chart(growthCtx, {
-                type: 'line',
-                data: {
-                    labels: growthData.labels,
-                    datasets: [{
-                        label: 'Cumulative Users',
-                        data: growthData.data,
-                        borderColor: 'rgb(75, 192, 192)',
-                        backgroundColor: 'rgba(75, 192, 192, 0.1)',
-                        borderWidth: 2,
-                        fill: true,
-                        tension: 0.3
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    scales: {
-                        y: {
-                            beginAtZero: true
+            // User Growth Chart
+            const growthCtx = document.getElementById('userGrowthChart').getContext('2d');
+
+            if (userGrowthChart) {
+                userGrowthChart.data.labels = growthData.labels;
+                userGrowthChart.data.datasets[0].data = growthData.data;
+                userGrowthChart.update();
+            } else {
+                userGrowthChart = new Chart(growthCtx, {
+                    type: 'line',
+                    data: {
+                        labels: growthData.labels,
+                        datasets: [{
+                            label: 'Cumulative Users',
+                            data: growthData.data,
+                            borderColor: 'rgb(75, 192, 192)',
+                            backgroundColor: 'rgba(75, 192, 192, 0.1)',
+                            borderWidth: 2,
+                            fill: true,
+                            tension: 0.3
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: true,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
                         }
                     }
-                }
-            });
-        }
-
-        // Load message stats
-        const statsResponse = await fetch('/api/analytics/message_stats');
-        const statsData = await statsResponse.json();
-
-        // Update counters
-        document.getElementById('messageCount').textContent = statsData.total_messages;
-        document.getElementById('successCount').textContent = statsData.successful_sends;
-        document.getElementById('failCount').textContent = statsData.failed_sends;
-        document.getElementById('activeTasks').textContent = statsData.active_tasks || 0;
-        document.getElementById('pendingTasks').textContent = statsData.pending_tasks || 0;
-
-        // Message Stats Chart
-        const statsCtx = document.getElementById('messageStatsChart').getContext('2d');
-        
-        if (messageStatsChart) {
-            messageStatsChart.data.datasets[0].data = [statsData.successful_sends, statsData.failed_sends];
-            messageStatsChart.update();
-        } else {
-            messageStatsChart = new Chart(statsCtx, {
-                type: 'doughnut',
-                data: {
-                    labels: ['Successful', 'Failed'],
-                    datasets: [{
-                        data: [statsData.successful_sends, statsData.failed_sends],
-                        backgroundColor: [
-                            'rgb(40, 167, 69)',
-                            'rgb(220, 53, 69)'
-                        ],
-                        borderColor: [
-                            'rgba(40, 167, 69, 0.8)',
-                            'rgba(220, 53, 69, 0.8)'
-                        ],
-                        borderWidth: 2
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                        }
-                    }
-                }
-            });
-        }
-
-        // Load recent activity
-        loadRecentActivity();
-
-    } catch (error) {
-        console.error('Error loading dashboard data:', error);
-    }
-}
-
-// Load real recent activity from task queue
-async function loadRecentActivity() {
-    try {
-        // Get recent tasks from task queue
-        const response = await fetch('/api/task-status');
-        
-        if (!response.ok) {
-            // Fallback to static activity
-            showStaticActivity();
-            return;
-        }
-        
-        const tasks = await response.json();
-        
-        if (!Array.isArray(tasks) || tasks.length === 0) {
-            showStaticActivity();
-            return;
-        }
-        
-        // Sort by creation time (newest first)
-        const recentTasks = tasks.slice(0, 5);
-        
-        let activityHtml = '';
-        
-        for (const task of recentTasks) {
-            let icon = 'fas fa-paper-plane text-primary';
-            let status = task.status;
-            
-            if (task.status === 'completed') {
-                icon = 'fas fa-check text-success';
-            } else if (task.status === 'failed') {
-                icon = 'fas fa-exclamation-triangle text-danger';
-            } else if (task.status === 'running') {
-                icon = 'fas fa-spinner fa-spin text-warning';
+                });
             }
-            
-            const createdAt = new Date(task.created_at);
-            const timeAgo = getTimeAgo(createdAt);
-            
-            activityHtml += `
+
+            // Load message stats
+            const statsResponse = await fetch('/api/analytics/message_stats');
+            const statsData = await statsResponse.json();
+
+            // Update counters
+            document.getElementById('messageCount').textContent = statsData.total_messages;
+            document.getElementById('successCount').textContent = statsData.successful_sends;
+            document.getElementById('failCount').textContent = statsData.failed_sends;
+            document.getElementById('activeTasks').textContent = statsData.active_tasks || 0;
+            document.getElementById('pendingTasks').textContent = statsData.pending_tasks || 0;
+
+            // Message Stats Chart
+            const statsCtx = document.getElementById('messageStatsChart').getContext('2d');
+
+            if (messageStatsChart) {
+                messageStatsChart.data.datasets[0].data = [statsData.successful_sends, statsData.failed_sends];
+                messageStatsChart.update();
+            } else {
+                messageStatsChart = new Chart(statsCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Successful', 'Failed'],
+                        datasets: [{
+                            data: [statsData.successful_sends, statsData.failed_sends],
+                            backgroundColor: [
+                                'rgb(40, 167, 69)',
+                                'rgb(220, 53, 69)'
+                            ],
+                            borderColor: [
+                                'rgba(40, 167, 69, 0.8)',
+                                'rgba(220, 53, 69, 0.8)'
+                            ],
+                            borderWidth: 2
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                            }
+                        }
+                    }
+                });
+            }
+
+            // Load recent activity
+            loadRecentActivity();
+
+        } catch (error) {
+            console.error('Error loading dashboard data:', error);
+        }
+    }
+
+    // Load real recent activity from task queue
+    async function loadRecentActivity() {
+        try {
+            // Get recent tasks from task queue
+            const response = await fetch('/api/task-status');
+
+            if (!response.ok) {
+                // Fallback to static activity
+                showStaticActivity();
+                return;
+            }
+
+            const tasks = await response.json();
+
+            if (!Array.isArray(tasks) || tasks.length === 0) {
+                showStaticActivity();
+                return;
+            }
+
+            // Sort by creation time (newest first)
+            const recentTasks = tasks.slice(0, 5);
+
+            let activityHtml = '';
+
+            for (const task of recentTasks) {
+                let icon = 'fas fa-paper-plane text-primary';
+                let status = task.status;
+
+                if (task.status === 'completed') {
+                    icon = 'fas fa-check text-success';
+                } else if (task.status === 'failed') {
+                    icon = 'fas fa-exclamation-triangle text-danger';
+                } else if (task.status === 'running') {
+                    icon = 'fas fa-spinner fa-spin text-warning';
+                }
+
+                const createdAt = new Date(task.created_at);
+                const timeAgo = getTimeAgo(createdAt);
+
+                activityHtml += `
                 <div class="list-group-item">
                     <i class="${icon} me-2"></i>
                     <small class="text-muted">${timeAgo}</small>
@@ -324,142 +325,142 @@ async function loadRecentActivity() {
                     ${task.message ? `<small class="text-muted">${task.message}</small>` : ''}
                 </div>
             `;
-        }
-        
-        document.getElementById('recentActivity').innerHTML = activityHtml || '<div class="list-group-item"><i class="fas fa-inbox me-2"></i>No recent activity</div>';
-        
-    } catch (error) {
-        console.error('Error loading activity:', error);
-        showStaticActivity();
-    }
-}
+            }
 
-function showStaticActivity() {
-    const activityHtml = `
+            document.getElementById('recentActivity').innerHTML = activityHtml || '<div class="list-group-item"><i class="fas fa-inbox me-2"></i>No recent activity</div>';
+
+        } catch (error) {
+            console.error('Error loading activity:', error);
+            showStaticActivity();
+        }
+    }
+
+    function showStaticActivity() {
+        const activityHtml = `
         <div class="list-group-item">
             <i class="fas fa-user-plus text-success me-2"></i>
             <small class="text-muted">System initialized</small>
             <div>Dashboard ready to monitor messages</div>
         </div>
     `;
-    document.getElementById('recentActivity').innerHTML = activityHtml;
-}
-
-function getTimeAgo(date) {
-    const seconds = Math.floor((new Date() - date) / 1000);
-    
-    let interval = seconds / 31536000;
-    if (interval > 1) return Math.floor(interval) + ' years ago';
-    
-    interval = seconds / 2592000;
-    if (interval > 1) return Math.floor(interval) + ' months ago';
-    
-    interval = seconds / 86400;
-    if (interval > 1) return Math.floor(interval) + ' days ago';
-    
-    interval = seconds / 3600;
-    if (interval > 1) return Math.floor(interval) + ' hours ago';
-    
-    interval = seconds / 60;
-    if (interval > 1) return Math.floor(interval) + ' minutes ago';
-    
-    return Math.floor(seconds) + ' seconds ago';
-}
-
-// ============================================================
-// QUEUE SAFETY MONITORING
-// ============================================================
-
-async function loadQueueHealth() {
-    try {
-        const response = await fetch('/api/queue/health');
-        if (!response.ok) return;
-        
-        const health = await response.json();
-        
-        // Update safety card
-        const queueStatus = document.getElementById('queueStatus');
-        const loopStatus = document.getElementById('loopStatus');
-        const recentSubmissions = document.getElementById('recentSubmissions');
-        
-        // Queue Status
-        if (health.paused) {
-            queueStatus.textContent = 'PAUSED';
-            queueStatus.className = 'badge badge-danger';
-            document.getElementById('pauseBtn').style.display = 'none';
-            document.getElementById('resumeBtn').style.display = 'inline-block';
-        } else {
-            queueStatus.textContent = 'RUNNING';
-            queueStatus.className = 'badge badge-success';
-            document.getElementById('pauseBtn').style.display = 'inline-block';
-            document.getElementById('resumeBtn').style.display = 'none';
-        }
-        
-        // Loop Detection Status
-        if (health.loop_detected) {
-            loopStatus.textContent = '⚠️ LOOP DETECTED';
-            loopStatus.className = 'badge badge-danger';
-        } else {
-            loopStatus.textContent = 'Monitoring';
-            loopStatus.className = 'badge badge-info';
-        }
-        
-        // Recent submissions
-        recentSubmissions.textContent = health.recent_submissions;
-        
-    } catch (e) {
-        console.error('Failed to load queue health:', e);
+        document.getElementById('recentActivity').innerHTML = activityHtml;
     }
-}
 
-async function pauseQueue() {
-    try {
-        const response = await fetch('/api/queue/pause', { method: 'POST' });
-        if (response.ok) {
-            alert('✅ Task queue paused');
-            loadQueueHealth();
+    function getTimeAgo(date) {
+        const seconds = Math.floor((new Date() - date) / 1000);
+
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + ' years ago';
+
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + ' months ago';
+
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + ' days ago';
+
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + ' hours ago';
+
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + ' minutes ago';
+
+        return Math.floor(seconds) + ' seconds ago';
+    }
+
+    // ============================================================
+    // QUEUE SAFETY MONITORING
+    // ============================================================
+
+    async function loadQueueHealth() {
+        try {
+            const response = await fetch('/api/queue/health');
+            if (!response.ok) return;
+
+            const health = await response.json();
+
+            // Update safety card
+            const queueStatus = document.getElementById('queueStatus');
+            const loopStatus = document.getElementById('loopStatus');
+            const recentSubmissions = document.getElementById('recentSubmissions');
+
+            // Queue Status
+            if (health.paused) {
+                queueStatus.textContent = 'PAUSED';
+                queueStatus.className = 'badge badge-danger';
+                document.getElementById('pauseBtn').style.display = 'none';
+                document.getElementById('resumeBtn').style.display = 'inline-block';
+            } else {
+                queueStatus.textContent = 'RUNNING';
+                queueStatus.className = 'badge badge-success';
+                document.getElementById('pauseBtn').style.display = 'inline-block';
+                document.getElementById('resumeBtn').style.display = 'none';
+            }
+
+            // Loop Detection Status
+            if (health.loop_detected) {
+                loopStatus.textContent = '⚠️ LOOP DETECTED';
+                loopStatus.className = 'badge badge-danger';
+            } else {
+                loopStatus.textContent = 'Monitoring';
+                loopStatus.className = 'badge badge-info';
+            }
+
+            // Recent submissions
+            recentSubmissions.textContent = health.recent_submissions;
+
+        } catch (e) {
+            console.error('Failed to load queue health:', e);
         }
-    } catch (e) {
-        alert('Error pausing queue: ' + e);
     }
-}
 
-async function resumeQueue() {
-    try {
-        const response = await fetch('/api/queue/resume', { method: 'POST' });
-        if (response.ok) {
-            alert('✅ Task queue resumed');
-            loadQueueHealth();
+    async function pauseQueue() {
+        try {
+            const response = await fetch('/api/queue/pause', { method: 'POST' });
+            if (response.ok) {
+                alert('✅ Task queue paused');
+                loadQueueHealth();
+            }
+        } catch (e) {
+            alert('Error pausing queue: ' + e);
         }
-    } catch (e) {
-        alert('Error resuming queue: ' + e);
     }
-}
 
-async function resetQueue() {
-    if (!confirm('🔄 Clear loop detection and reset queue?\n\nThis will allow the bot to restart. Continue?')) {
-        return;
-    }
-    
-    try {
-        const response = await fetch('/api/queue/clear', { method: 'POST' });
-        if (response.ok) {
-            alert('✅ Queue cleared. Bot can now be restarted.');
-            loadQueueHealth();
+    async function resumeQueue() {
+        try {
+            const response = await fetch('/api/queue/resume', { method: 'POST' });
+            if (response.ok) {
+                alert('✅ Task queue resumed');
+                loadQueueHealth();
+            }
+        } catch (e) {
+            alert('Error resuming queue: ' + e);
         }
-    } catch (e) {
-        alert('Error resetting queue: ' + e);
     }
-}
 
-// Load data when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    loadDashboardData();
-    loadQueueHealth();
-});
+    async function resetQueue() {
+        if (!confirm('🔄 Clear loop detection and reset queue?\n\nThis will allow the bot to restart. Continue?')) {
+            return;
+        }
 
-// Auto-refresh every 10 seconds
-setInterval(loadDashboardData, 10000);
-setInterval(loadQueueHealth, 5000);  // Check queue health more frequently
+        try {
+            const response = await fetch('/api/queue/clear', { method: 'POST' });
+            if (response.ok) {
+                alert('✅ Queue cleared. Bot can now be restarted.');
+                loadQueueHealth();
+            }
+        } catch (e) {
+            alert('Error resetting queue: ' + e);
+        }
+    }
+
+    // Load data when page loads
+    document.addEventListener('DOMContentLoaded', () => {
+        loadDashboardData();
+        loadQueueHealth();
+    });
+
+    // Auto-refresh every 10 seconds
+    setInterval(loadDashboardData, 10000);
+    setInterval(loadQueueHealth, 5000);  // Check queue health more frequently
 </script>
 {% endblock %}

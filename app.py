@@ -20,7 +20,7 @@ from database import db
 from bot_handler import bot, run_bot_forever, send_bulk_by_chatids, send_template_to_selected, send_personalized_from_rows, send_personalized_from_template, request_phone_number
 
 # Import optimization modules
-from task_queue import get_task_queue
+from task_queue import get_task_queue, update_task_progress
 from excel_processor import ExcelProcessor
 from message_sender import send_personalized_from_template_optimized, send_bulk_optimized
 
@@ -73,11 +73,13 @@ def dashboard():
         bot_info = bot.get_me()
         bot_name = bot_info.first_name
         bot_username = bot_info.username
+        bot_status = "Online"
     except:
         bot_name = "Unknown"
         bot_username = "Unknown"
+        bot_status = "Offline"
 
-    return render_template('dashboard.html', user_count=user_count, bot_name=bot_name, bot_username=bot_username)
+    return render_template('dashboard.html', user_count=user_count, bot_name=bot_name, bot_username=bot_username, bot_status=bot_status)
 
 @app.route('/users')
 @login_required
@@ -413,12 +415,21 @@ def send_message():
                 
                 task_id = str(uuid.uuid4())
                 task_queue = get_task_queue()
-                task_queue.submit_task(
-                    task_id,
-                    send_bulk_optimized,
-                    args=(chat_ids, template),
-                    kwargs={'delay': config.SEND_DELAY}
-                )
+                
+                def run_bulk_send(curr_task_id=task_id, cids=chat_ids, msg=template):
+                    """Wrapper for bulk send with progress"""
+                    def progress(current, total):
+                        pct = int((current / total) * 100)
+                        update_task_progress(curr_task_id, pct, f"Sending {current}/{total}")
+                        
+                    return send_bulk_optimized(
+                        cids, 
+                        msg, 
+                        delay=config.SEND_DELAY,
+                        progress_callback=progress
+                    )
+
+                task_queue.submit_task(task_id, run_bulk_send)
                 
                 flash(f"Message send started in background (Task ID: {task_id[:8]}). Check status in dashboard.", 'info')
                 return redirect(url_for('task_status', task_id=task_id))
@@ -455,18 +466,28 @@ def send_message():
                 task_id = str(uuid.uuid4())
                 task_queue = get_task_queue()
                 
-                def process_and_send_excel():
+                def process_and_send_excel(curr_task_id=task_id):
                     """Background task for Excel processing and sending"""
                     try:
                         # Read and prepare rows
+                        update_task_progress(curr_task_id, 5, "Reading Excel file...")
                         df = ExcelProcessor.read_excel_chunked(file_path)
+                        
+                        update_task_progress(curr_task_id, 10, "Preparing data...")
                         rows = ExcelProcessor.prepare_personalized_rows(
                             df, target_column, custom_columns
                         )
                         
+                        def progress(current, total):
+                            # Scale progress from 10% to 100%
+                            pct = 10 + int((current / total) * 90)
+                            update_task_progress(curr_task_id, pct, f"Sending {current}/{total}")
+
                         # Send with progress tracking
                         result = send_personalized_from_template_optimized(
-                            template, rows, delay=config.SEND_DELAY
+                            template, rows, 
+                            delay=config.SEND_DELAY,
+                            progress_callback=progress
                         )
                         
                         return result
