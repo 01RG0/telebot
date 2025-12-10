@@ -32,10 +32,10 @@ app = Flask(__name__)
 app.secret_key = os.getenv("FLASK_SECRET_KEY", "super_secret_key_change_this")
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "admin123")  # Default password
 
-# Start Bot Thread
-if not os.environ.get("WERKZEUG_RUN_MAIN"):  # Prevent double start in debug mode
-    bot_thread = threading.Thread(target=run_bot_forever, daemon=True)
-    bot_thread.start()
+# Start Bot Thread (disabled for web interface - run bot separately)
+# if not os.environ.get("WERKZEUG_RUN_MAIN") and not os.environ.get("FLASK_DEBUG"):
+#     bot_thread = threading.Thread(target=run_bot_forever, daemon=True)
+#     bot_thread.start()
 
 # Login Decorator
 def login_required(f):
@@ -659,4 +659,4 @@ def queue_clear():
     return jsonify({'status': 'cleared', 'message': 'Queue reset. Bot can be restarted.'}), 200
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    app.run(debug=True, host='127.0.0.1', port=8000)
